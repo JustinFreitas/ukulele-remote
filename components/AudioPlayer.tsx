@@ -63,7 +63,7 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
     return (
         <ThemedView style={styles.container}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                {isReplayGainEnabled && (
+                {isReplayGainEnabled && currentTrack && (
                     <View style={{
                         backgroundColor: isReplayGain ? '#4CAF50' : '#888',
                         width: 20,
