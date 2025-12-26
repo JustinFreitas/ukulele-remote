@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "my-first-app",
-    "slug": "my-first-app",
+    "name": "Ukulele Remote",
+    "slug": "ukulele-remote",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myfirstapp",
+    "scheme": "ukulele-remote",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
