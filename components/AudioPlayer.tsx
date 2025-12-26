@@ -22,10 +22,10 @@ type Props = {
     onSeek: (position: number) => void;
     isReplayGain?: boolean;
     isReplayGainEnabled?: boolean;
-
+    hasNext?: boolean;
 };
 
-export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, isReplayGainEnabled }: Props) {
+export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, isReplayGainEnabled, hasNext = true }: Props) {
     const iconColor = useThemeColor({}, 'text');
     const trackColor = useThemeColor({ light: '#e0e0e0', dark: '#333333' }, 'text');
     const [barWidth, setBarWidth] = React.useState(0);
@@ -94,7 +94,7 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
                     <Ionicons name={isPlaying ? "pause" : "play"} size={48} color={iconColor} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={onNext}>
+                <TouchableOpacity onPress={onNext} disabled={!hasNext} style={{ opacity: hasNext ? 1.0 : 0.3 }}>
                     <Ionicons name="play-skip-forward" size={32} color={iconColor} />
                 </TouchableOpacity>
             </View>

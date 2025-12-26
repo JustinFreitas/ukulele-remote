@@ -38,6 +38,7 @@ export interface PlayerStatusDto {
     minVolume: number;
     maxVolume: number;
     isReplayGainEnabled: boolean;
+    queueSize: number;
 }
 
 // ...

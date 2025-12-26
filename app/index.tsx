@@ -21,7 +21,7 @@ export default function AudioControllerScreen() {
   const [volume, setVolume] = useState(0.5);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
-  const [serverStats, setServerStats] = useState({ minVolume: 0, maxVolume: 100, isReplayGain: false, isReplayGainEnabled: false });
+  const [serverStats, setServerStats] = useState({ minVolume: 0, maxVolume: 100, isReplayGain: false, isReplayGainEnabled: false, queueSize: 0 });
   const [useWebsockets, setUseWebsockets] = useState(false);
   const [guildId, setGuildId] = useState<string | null>(null);
   const [repeat, setRepeat] = useState(false);
@@ -235,7 +235,8 @@ export default function AudioControllerScreen() {
         minVolume: status.minVolume,
         maxVolume: status.maxVolume,
         isReplayGain: status.currentTrack?.isReplayGain || false,
-        isReplayGainEnabled: status.isReplayGainEnabled
+        isReplayGainEnabled: status.isReplayGainEnabled,
+        queueSize: status.queueSize || 0
       });
     }
   };
@@ -468,6 +469,7 @@ export default function AudioControllerScreen() {
           onSeek={handleSeek}
           isReplayGain={!!serverStats.isReplayGain} // We need to store this in state
           isReplayGainEnabled={!!serverStats.isReplayGainEnabled}
+          hasNext={serverStats.queueSize > 0 || repeat || loop}
         />
 
         <View style={styles.extraControls}>
