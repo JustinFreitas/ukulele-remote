@@ -11,7 +11,8 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { QueueList, Track } from '@/components/QueueList';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { API_BASE_URL, UkuleleApi } from '@/constants/ukulele-api';
+import { VoiceChannelSelector } from '@/components/VoiceChannelSelector';
+import { API_BASE_URL, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import WebSocketService from '@/services/WebSocketService';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,12 +33,23 @@ export default function AudioControllerScreen() {
   const [metroDisconnected, setMetroDisconnected] = useState(false);
 
 
+
   // Seek bar state
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const lastVolumeUpdate = useRef(0);
 
+  // Fade state
+  const fadeInterval = useRef<any>(null);
+  const preFadeVolume = useRef<number>(0.5);
+  const [autoFadeIn, setAutoFadeIn] = useState(false);
+  const lastTrackId = useRef<string | null>(null);
+
   const iconColor = useThemeColor({}, 'text');
+
+  // Channels
+  const [channels, setChannels] = useState<VoiceChannelDto[]>([]);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
 
 
@@ -162,6 +174,15 @@ export default function AudioControllerScreen() {
     };
   }, [guildId, connectionStatus]);
 
+  const fetchChannels = async (gid: string) => {
+    try {
+      const chans = await UkuleleApi.getChannels(gid);
+      setChannels(chans);
+      if (chans.length > 0 && !selectedChannelId) {
+        setSelectedChannelId(chans[0].id); // Select the first channel by default
+      }
+    } catch (e) { console.error("Failed to fetch channels", e); }
+  };
 
   const loadGuilds = async () => {
     console.log("DEBUG: loadGuilds started");
@@ -170,6 +191,7 @@ export default function AudioControllerScreen() {
       console.log("DEBUG: loadGuilds found:", guilds.length);
       if (guilds.length > 0) {
         setGuildId(guilds[0].id);
+        fetchChannels(guilds[0].id); // Fetch channels for the selected guild
         setConnectionStatus('connected');
         console.log("DEBUG: calling fetchPlayerState from loadGuilds");
         fetchPlayerState(guilds[0].id);
@@ -208,7 +230,7 @@ export default function AudioControllerScreen() {
       setErrorMessage(null);
     }
 
-    setIsPlaying(!status.isPaused);
+    setIsPlaying(!status.paused);
 
     // Position Sync
     // Only sync if difference is significant (>2s) to avoid jitter fighting local interpolation
@@ -229,6 +251,17 @@ export default function AudioControllerScreen() {
 
     setRepeat(status.repeatTrack);
     setLoop(status.queueLooping);
+
+    // Auto Fade In Logic
+    const newTrackId = status.currentTrack?.uri || null;
+    if (newTrackId !== lastTrackId.current) {
+      if (newTrackId && autoFadeIn) {
+        console.log("Auto Fade In Triggered");
+        performFadeIn();
+        setAutoFadeIn(false);
+      }
+      lastTrackId.current = newTrackId;
+    }
     setCurrentTrack(status.currentTrack?.title || null);
     if (status.minVolume !== undefined) {
       setServerStats({
@@ -238,6 +271,11 @@ export default function AudioControllerScreen() {
         isReplayGainEnabled: status.isReplayGainEnabled,
         queueSize: status.queueSize || 0
       });
+    }
+
+    // Sync Channel ID
+    if (status.channelId) {
+      setSelectedChannelId((prev) => (prev !== status.channelId ? status.channelId : prev));
     }
   };
 
@@ -293,6 +331,12 @@ export default function AudioControllerScreen() {
   };
 
   const handleVolumeChange = async (newVol: number) => {
+    // If user manually changes volume, stop any active fade
+    if (fadeInterval.current) {
+      clearInterval(fadeInterval.current);
+      fadeInterval.current = null;
+    }
+
     if (!guildId) return;
     const volInt = Math.round(newVol * 1000);
     lastVolumeUpdate.current = Date.now();
@@ -301,6 +345,88 @@ export default function AudioControllerScreen() {
       await UkuleleApi.setVolume(guildId, volInt);
     } catch (e: any) {
       console.error(e);
+    }
+  };
+
+  const handleFadeOut = () => {
+    if (fadeInterval.current) clearInterval(fadeInterval.current);
+
+    // Save current volume to return to later (unless it's already near 0)
+    if (volume > 0.05) {
+      preFadeVolume.current = volume;
+    }
+
+    const STEPS = 20;
+    const DURATION = 2000; // 2 seconds
+    const intervalTime = DURATION / STEPS;
+    const startVol = volume;
+    const step = startVol / STEPS;
+
+    let currentStep = 0;
+
+    fadeInterval.current = setInterval(() => {
+      currentStep++;
+      const newVol = Math.max(0, startVol - (step * currentStep));
+
+      // Update local state and invalidating sync lock
+      setVolume(newVol);
+      lastVolumeUpdate.current = Date.now();
+
+      // Fire and forget volume update
+      if (guildId) {
+        const volInt = Math.round(newVol * 1000);
+        UkuleleApi.setVolume(guildId, volInt).catch(() => { });
+      }
+
+      if (currentStep >= STEPS || newVol <= 0) {
+        clearInterval(fadeInterval.current);
+        fadeInterval.current = null;
+      }
+    }, intervalTime);
+  };
+
+  const performFadeIn = () => {
+    if (fadeInterval.current) clearInterval(fadeInterval.current);
+
+    const targetVol = Math.max(0.1, preFadeVolume.current); // return to pre-fade or at least 10%
+    if (volume >= targetVol) return; // Already there
+
+    const STEPS = 20;
+    const DURATION = 2000; // 2 seconds
+    const intervalTime = DURATION / STEPS;
+    const startVol = volume;
+    const range = targetVol - startVol;
+    const step = range / STEPS;
+
+    let currentStep = 0;
+
+    fadeInterval.current = setInterval(() => {
+      currentStep++;
+      const newVol = Math.min(targetVol, startVol + (step * currentStep));
+
+      setVolume(newVol);
+      lastVolumeUpdate.current = Date.now();
+
+      if (guildId) {
+        const volInt = Math.round(newVol * 1000);
+        UkuleleApi.setVolume(guildId, volInt).catch(() => { });
+      }
+
+      if (currentStep >= STEPS || newVol >= targetVol) {
+        clearInterval(fadeInterval.current);
+        fadeInterval.current = null;
+      }
+    }, intervalTime);
+  };
+
+  const handleFadeIn = () => {
+    // If volume is basically silent, just fade in now
+    if (volume < 0.05) {
+      performFadeIn();
+      setAutoFadeIn(false); // Disarm if it was armed
+    } else {
+      // Otherwise toggle the "Arm" state for the next track
+      setAutoFadeIn(!autoFadeIn);
     }
   };
 
@@ -396,6 +522,33 @@ export default function AudioControllerScreen() {
     }
   };
 
+  const handleChannelSelect = async (channelId: string) => {
+    setSelectedChannelId(channelId);
+    if (!guildId) return;
+    if (isPlaying) {
+      try {
+        await UkuleleApi.move(guildId, channelId);
+      } catch (e) {
+        console.error("Failed to move bot", e);
+      }
+    }
+  };
+
+  const handleLoadDefault = async () => {
+    if (!guildId) return;
+    try {
+      if (autoFadeIn) {
+        await UkuleleApi.setVolume(guildId, 0);
+      }
+      await UkuleleApi.play(guildId, "", selectedChannelId || undefined, autoFadeIn);
+      fetchPlayerState();
+      setTimeout(fetchQueue, 500); // Give it a moment to load
+      setTimeout(() => fetchPlayerState(), 1000); // Check again once loaded
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("Failed to load default playlist", e.message);
+    }
+  };
 
 
   if (metroDisconnected) {
@@ -450,6 +603,13 @@ export default function AudioControllerScreen() {
           )}
         </View>
 
+        {/* Voice Channel Selector */}
+        <VoiceChannelSelector
+          channels={channels}
+          selectedChannelId={selectedChannelId}
+          onSelectChannel={handleChannelSelect}
+        />
+
         {connectionStatus === 'connecting' && (
           <ThemedText style={styles.statusText}>Connecting to Ukulele...</ThemedText>
         )}
@@ -470,28 +630,23 @@ export default function AudioControllerScreen() {
           isReplayGain={!!serverStats.isReplayGain} // We need to store this in state
           isReplayGainEnabled={!!serverStats.isReplayGainEnabled}
           hasNext={serverStats.queueSize > 0 || repeat || loop}
+          onFadeIn={handleFadeIn}
+          onFadeOut={handleFadeOut}
+          onStop={handleStop}
+          onShuffle={handleShuffle}
+          onToggleRepeat={toggleRepeat}
+          onToggleLoop={toggleLoop}
+          repeat={repeat}
+          loop={loop}
+          autoFadeIn={autoFadeIn}
         />
-
-        <View style={styles.extraControls}>
-          <TouchableOpacity onPress={handleStop} style={styles.controlBtn}>
-            <Ionicons name="stop-circle-outline" size={32} color="red" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleShuffle} style={styles.controlBtn}>
-            <Ionicons name="shuffle" size={32} color={iconColor} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={toggleRepeat} style={styles.controlBtn}>
-            <Ionicons name="repeat" size={32} color={repeat ? "green" : iconColor} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={toggleLoop} style={styles.controlBtn}>
-            <Ionicons name="infinite" size={32} color={loop ? "green" : iconColor} />
-          </TouchableOpacity>
-        </View>
 
         <QueueList
           queue={queue}
           onRemove={handleRemoveTrack}
           onPlay={handlePlayTrack}
           onReorder={handleReorder}
+          onLoadDefault={handleLoadDefault}
         />
       </ThemedView>
       <View style={{ position: 'absolute', bottom: 20, right: 20, opacity: 0.5 }}>
@@ -516,7 +671,7 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 5,
     gap: 10,
   },
   pageTitle: {
@@ -530,14 +685,5 @@ const styles = StyleSheet.create({
   statusText: {
     marginBottom: 10,
     fontStyle: 'italic',
-  },
-  extraControls: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 20,
-    marginTop: -10,
-  },
-  controlBtn: {
-    padding: 5,
   },
 });

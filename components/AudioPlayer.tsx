@@ -23,9 +23,18 @@ type Props = {
     isReplayGain?: boolean;
     isReplayGainEnabled?: boolean;
     hasNext?: boolean;
+    onFadeIn: () => void;
+    onFadeOut: () => void;
+    onStop: () => void;
+    onShuffle: () => void;
+    onToggleRepeat: () => void;
+    onToggleLoop: () => void;
+    repeat: boolean;
+    loop: boolean;
+    autoFadeIn: boolean;
 };
 
-export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, isReplayGainEnabled, hasNext = true }: Props) {
+export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, isReplayGainEnabled, hasNext = true, onFadeIn, onFadeOut, onStop, onShuffle, onToggleRepeat, onToggleLoop, repeat, loop, autoFadeIn }: Props) {
     const iconColor = useThemeColor({}, 'text');
     const trackColor = useThemeColor({ light: '#e0e0e0', dark: '#333333' }, 'text');
     const [barWidth, setBarWidth] = React.useState(0);
@@ -131,27 +140,65 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
             </View>
 
             <View style={styles.volumeControls}>
-                <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepLarge / 100))} style={styles.volButton}>
-                    <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>-{stepLarge}</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepMedium / 100))} style={styles.volButton}>
-                    <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>-{stepMedium}</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepSmall / 100))} style={styles.volButton}>
-                    <ThemedText style={{ color: 'black' }}>-{stepSmall}</ThemedText>
-                </TouchableOpacity>
+                {/* 1. -Large / FadeOut */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepLarge / 100))} style={styles.volButton}>
+                        <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>-{stepLarge}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onFadeOut} style={[styles.volButton, { backgroundColor: '#ffebee', width: '100%', paddingHorizontal: 0 }]}>
+                        <Ionicons name="trending-down" size={16} color="black" />
+                    </TouchableOpacity>
+                </View>
 
-                <ThemedText type="default" style={styles.volLabel}>Vol</ThemedText>
+                {/* 2. -Medium / Stop */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepMedium / 100))} style={styles.volButton}>
+                        <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>-{stepMedium}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onStop} style={{ padding: 5 }}>
+                        <Ionicons name="stop" size={24} color="red" />
+                    </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepSmall / 100))} style={styles.volButton}>
-                    <ThemedText style={{ color: 'black' }}>+{stepSmall}</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepMedium / 100))} style={styles.volButton}>
-                    <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>+{stepMedium}</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepLarge / 100))} style={styles.volButton}>
-                    <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>+{stepLarge}</ThemedText>
-                </TouchableOpacity>
+                {/* 3. -Small / Shuffle */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.max(0, volume - stepSmall / 100))} style={styles.volButton}>
+                        <ThemedText style={{ color: 'black' }}>-{stepSmall}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onShuffle} style={{ padding: 5 }}>
+                        <Ionicons name="shuffle" size={24} color={iconColor} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* 5. +Small / Repeat */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepSmall / 100))} style={styles.volButton}>
+                        <ThemedText style={{ color: 'black' }}>+{stepSmall}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onToggleRepeat} style={{ padding: 5 }}>
+                        <Ionicons name="repeat" size={24} color={repeat ? "green" : iconColor} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* 6. +Medium / Loop */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepMedium / 100))} style={styles.volButton}>
+                        <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>+{stepMedium}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onToggleLoop} style={{ padding: 5 }}>
+                        <Ionicons name="infinite" size={24} color={loop ? "green" : iconColor} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* 7. +Large / FadeIn */}
+                <View style={styles.controlColumn}>
+                    <TouchableOpacity onPress={() => onVolumeChange(Math.min(1, volume + stepLarge / 100))} style={styles.volButton}>
+                        <ThemedText style={{ fontWeight: 'bold', color: 'black' }}>+{stepLarge}</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onFadeIn} style={[styles.volButton, { backgroundColor: autoFadeIn ? '#4CAF50' : '#e8f5e9', width: '100%', paddingHorizontal: 0 }]}>
+                        <Ionicons name="trending-up" size={16} color={autoFadeIn ? "white" : "black"} />
+                    </TouchableOpacity>
+                </View>
             </View>
         </ThemedView>
     );
@@ -192,7 +239,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 10,
         marginTop: 15,
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'center',
     },
     volButton: {
@@ -200,8 +247,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         backgroundColor: '#eee',
         borderRadius: 5,
-        minWidth: 40,
-        alignItems: 'center'
+        minWidth: 55,
+        alignItems: 'center',
+        height: 35,
+        justifyContent: 'center'
+    },
+    controlColumn: {
+        alignItems: 'center',
+        gap: 8,
+        width: 55
     },
     volLabel: {
         fontWeight: 'bold',

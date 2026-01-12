@@ -17,16 +17,23 @@ type Props = {
     onRemove: (id: string) => void;
     onPlay: (id: string, index: number) => void;
     onReorder?: (fromIndex: number, toIndex: number) => void;
+    onLoadDefault: () => void;
 };
 
-export function QueueList({ queue, onRemove, onPlay, onReorder }: Props) {
+export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault }: Props) {
     const iconColor = useThemeColor({}, 'text');
 
     return (
         <ThemedView style={styles.container}>
             <ThemedText type="subtitle" style={styles.header}>Queue</ThemedText>
             {queue.length === 0 ? (
-                <ThemedText style={styles.emptyText}>Queue is empty</ThemedText>
+                <View style={{ alignItems: 'center', gap: 15, marginTop: 20 }}>
+                    <ThemedText style={styles.emptyText}>Queue is empty</ThemedText>
+                    <TouchableOpacity onPress={onLoadDefault} style={styles.loadDefaultBtn}>
+                        <Ionicons name="library-outline" size={20} color="white" />
+                        <ThemedText style={{ color: 'white', fontWeight: 'bold' }}>Load Default</ThemedText>
+                    </TouchableOpacity>
+                </View>
             ) : (
                 <FlatList
                     data={queue}
@@ -34,20 +41,8 @@ export function QueueList({ queue, onRemove, onPlay, onReorder }: Props) {
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item, index }) => (
                         <ThemedView style={styles.itemContainer}>
-                            <View style={styles.reorderControls}>
-                                <TouchableOpacity onPress={() => onReorder?.(index, index - 1)} disabled={index === 0} style={styles.reorderBtn}>
-                                    <Ionicons name="chevron-up" size={20} color={index === 0 ? '#ccc' : iconColor} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => onReorder?.(index, index + 1)} disabled={index === queue.length - 1} style={styles.reorderBtn}>
-                                    <Ionicons name="chevron-down" size={20} color={index === queue.length - 1 ? '#ccc' : iconColor} />
-                                </TouchableOpacity>
-                            </View>
                             <TouchableOpacity style={styles.trackInfo} onPress={() => onPlay(item.id, index)}>
-                                <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-                                {item.artist && <ThemedText style={styles.artist}>{item.artist}</ThemedText>}
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => onRemove(item.id)} style={styles.removeButton}>
-                                <Ionicons name="trash-outline" size={20} color="red" />
+                                <ThemedText type="defaultSemiBold" style={styles.title}>{item.title}</ThemedText>
                             </TouchableOpacity>
                         </ThemedView>
                     )}
@@ -78,7 +73,7 @@ const styles = StyleSheet.create({
     itemContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 6,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: '#ccc',
         gap: 10,
@@ -95,11 +90,23 @@ const styles = StyleSheet.create({
     trackInfo: {
         flex: 1,
     },
+    title: {
+        fontSize: 13,
+    },
     artist: {
-        fontSize: 12,
+        fontSize: 11,
         opacity: 0.6,
     },
     removeButton: {
         padding: 5,
+    },
+    loadDefaultBtn: {
+        flexDirection: 'row',
+        backgroundColor: '#2196F3',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 20,
+        alignItems: 'center',
+        gap: 8
     }
 });

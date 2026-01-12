@@ -29,7 +29,7 @@ export interface TrackDto {
 
 export interface PlayerStatusDto {
     guildId: string;
-    isPaused: boolean;
+    paused: boolean;
     volume: number;
     repeatTrack: boolean;
     queueLooping: boolean;
@@ -39,6 +39,7 @@ export interface PlayerStatusDto {
     maxVolume: number;
     isReplayGainEnabled: boolean;
     queueSize: number;
+    channelId?: string;
 }
 
 // ...
@@ -90,11 +91,11 @@ export const UkuleleApi = {
         return res.json();
     },
 
-    play: async (guildId: string, url: string, channelId?: string) => {
+    play: async (guildId: string, url: string, channelId?: string, fadeIn?: boolean) => {
         await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/play`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ url, channelId }),
+            body: JSON.stringify({ url, channelId, fadeIn: fadeIn ? "true" : "false" }),
         });
     },
     // ...
@@ -160,6 +161,14 @@ export const UkuleleApi = {
             method: 'POST',
             headers,
             body: JSON.stringify({ text })
+        });
+    },
+
+    move: async (guildId: string, channelId: string) => {
+        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/move`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ channelId })
         });
     },
 
