@@ -154,12 +154,16 @@ export default function AudioControllerScreen() {
       }
 
       // Queue & Security Polling (Always poll these for now, or move them to WS too later)
+      // Queue & Security Polling (Always poll these for now, or move them to WS too later)
       queueInterval = setInterval(async () => {
         if (guildId && connectionStatus === 'connected') {
           await fetchQueue();
           await fetchSecurityStats();
+          // Ensure we get player state even if WS fails
+          await fetchPlayerState();
         }
       }, Config.POLL_INTERVAL_SLOW);
+
     };
 
     setupConnection();

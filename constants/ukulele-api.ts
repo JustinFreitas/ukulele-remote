@@ -76,10 +76,13 @@ const fetchWithTimeout = async (resource: string, options: RequestInit = {}) => 
 
 export const UkuleleApi = {
     getGuilds: async (): Promise<GuildDto[]> => {
-        const res = await fetchWithTimeout(`${API_BASE_URL}/guilds`, { headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/guilds?_t=${Date.now()}`, {
+            headers: { ...headers, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
         if (!res.ok) throw new Error('Failed to fetch guilds');
         return res.json();
     },
+
 
     getChannels: async (guildId: string): Promise<VoiceChannelDto[]> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/channels`, { headers });
