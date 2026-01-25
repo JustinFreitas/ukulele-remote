@@ -16,7 +16,9 @@ const headers = {
 export interface GuildDto {
     id: string;
     name: string;
+    isPlaying: boolean;
 }
+
 
 export interface TrackDto {
     title: string;

@@ -190,14 +190,17 @@ export default function AudioControllerScreen() {
       const guilds = await UkuleleApi.getGuilds();
       console.log("DEBUG: loadGuilds found:", guilds.length);
       if (guilds.length > 0) {
-        setGuildId(guilds[0].id);
-        fetchChannels(guilds[0].id); // Fetch channels for the selected guild
+        // Find a guild that is playing, or default to the first one
+        const activeGuild = guilds.find(g => g.isPlaying) || guilds[0];
+        setGuildId(activeGuild.id);
+        fetchChannels(activeGuild.id); // Fetch channels for the selected guild
         setConnectionStatus('connected');
-        console.log("DEBUG: calling fetchPlayerState from loadGuilds");
-        fetchPlayerState(guilds[0].id);
+        console.log("DEBUG: calling fetchPlayerState from loadGuilds for", activeGuild.name);
+        fetchPlayerState(activeGuild.id);
         fetchQueue();
         fetchSecurityStats();
       }
+
     } catch (e: any) {
       console.error('Failed to load guilds', e);
       setConnectionStatus('error');
