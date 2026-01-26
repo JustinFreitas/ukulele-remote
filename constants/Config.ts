@@ -1,5 +1,5 @@
 export const Config = {
-    POLL_INTERVAL_FAST: Number(process.env.EXPO_PUBLIC_POLL_INTERVAL_FAST) || 1000,
+    POLL_INTERVAL_FAST: Number(process.env.EXPO_PUBLIC_POLL_INTERVAL_FAST) || 2500,
     POLL_INTERVAL_SLOW: Number(process.env.EXPO_PUBLIC_POLL_INTERVAL_SLOW) || 5000,
     VOL_STEP_SMALL: Number(process.env.EXPO_PUBLIC_VOL_STEP_SMALL) || 1,
     VOL_STEP_MEDIUM: Number(process.env.EXPO_PUBLIC_VOL_STEP_MEDIUM) || 5,

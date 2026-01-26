@@ -13,14 +13,14 @@ class WebSocketService {
 
     connect(url: string, onConnect: () => void, onError: (err: any) => void) {
         if (this.client && this.client.active) {
-            console.log('[WS] Already connected, skipping init');
+            // console.log('[WS] Already connected, skipping init');
             onConnect();
             return;
         }
 
         // Replace http/https with ws/wss
         const wsUrl = url.replace(/^http/, 'ws') + '/ws';
-        console.log('[WS] Connecting to:', wsUrl);
+        // console.log('[WS] Connecting to:', wsUrl);
 
         this.client = new Client({
             brokerURL: wsUrl,
@@ -31,7 +31,7 @@ class WebSocketService {
             // but stompjs handles it well with standard API.
             // If we needed SockJS we would use webSocketFactory
             onConnect: () => {
-                console.log('[WS] Connected');
+                // console.log('[WS] Connected');
                 onConnect();
             },
             onStompError: (frame) => {
@@ -57,7 +57,7 @@ class WebSocketService {
             return;
         }
 
-        console.log('[WS] Subscribing to:', topic);
+        // console.log('[WS] Subscribing to:', topic);
         this.subscriptions[topic] = this.client.subscribe(topic, (message) => {
             try {
                 const body = JSON.parse(message.body);

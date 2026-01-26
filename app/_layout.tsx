@@ -5,6 +5,16 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+
+// Temorary workaround for react-native-web warning
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  if (args[0] && typeof args[0] === 'string' && args[0].includes('props.pointerEvents is deprecated')) {
+    return;
+  }
+  originalWarn(...args);
+};
+
 export const unstable_settings = {
   anchor: 'index',
 };

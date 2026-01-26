@@ -189,17 +189,17 @@ export default function AudioControllerScreen() {
   };
 
   const loadGuilds = async () => {
-    console.log("DEBUG: loadGuilds started");
+    // console.log("DEBUG: loadGuilds started");
     try {
       const guilds = await UkuleleApi.getGuilds();
-      console.log("DEBUG: loadGuilds found:", guilds.length);
+      // console.log("DEBUG: loadGuilds found:", guilds.length);
       if (guilds.length > 0) {
         // Find a guild that is playing, or default to the first one
         const activeGuild = guilds.find(g => g.isPlaying) || guilds[0];
         setGuildId(activeGuild.id);
         fetchChannels(activeGuild.id); // Fetch channels for the selected guild
         setConnectionStatus('connected');
-        console.log("DEBUG: calling fetchPlayerState from loadGuilds for", activeGuild.name);
+        // console.log("DEBUG: calling fetchPlayerState from loadGuilds for", activeGuild.name);
         fetchPlayerState(activeGuild.id);
         fetchQueue();
         fetchSecurityStats();
@@ -217,10 +217,10 @@ export default function AudioControllerScreen() {
     if (!targetId) return;
     try {
       const status = await UkuleleApi.getPlayer(targetId);
-      console.log("DEBUG: fetchPlayerState status:", JSON.stringify(status));
+      // console.log("DEBUG: fetchPlayerState status:", JSON.stringify(status));
       handlePlayerStatusUpdate(status);
     } catch (e: any) {
-      console.error("DEBUG: fetchPlayerState error:", e);
+      console.error("fetchPlayerState error:", e);
       setConnectionStatus('error');
       let msg = e.message || "Unknown error";
       if (msg.includes("Network request failed") || msg.includes("timeout")) {
@@ -231,7 +231,7 @@ export default function AudioControllerScreen() {
   };
 
   const handlePlayerStatusUpdate = (status: any) => {
-    console.log("DEBUG: Handling status update", status);
+    // console.log("DEBUG: Handling status update", status);
     if (connectionStatus === 'error') {
       setConnectionStatus('connected');
       setErrorMessage(null);
