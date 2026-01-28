@@ -54,25 +54,35 @@ export default function AudioControllerScreen() {
 
 
   // Metro Connection Check
+  // Metro Connection Check
   useEffect(() => {
     if (__DEV__) {
       const host = Constants.expoConfig?.hostUri || 'localhost:8081';
       const metroUrl = `http://${host.split(':')[0]}:8081`;
+      let timeoutId: any;
+      let isMounted = true;
 
-      const interval: any = setInterval(async () => {
+      const checkMetro = async () => {
+        if (!isMounted) return;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), Config.METRO_CHECK_TIMEOUT);
+        const timeoutIdReq = setTimeout(() => controller.abort(), Config.METRO_CHECK_TIMEOUT);
         try {
           await fetch(metroUrl, { method: 'HEAD', signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (metroDisconnected) setMetroDisconnected(false);
+          clearTimeout(timeoutIdReq);
+          if (metroDisconnected && isMounted) setMetroDisconnected(false);
         } catch (e) {
-          clearTimeout(timeoutId);
+          clearTimeout(timeoutIdReq);
           if (Platform.OS === 'android') BackHandler.exitApp();
-          else setMetroDisconnected(true);
+          else if (isMounted) setMetroDisconnected(true);
         }
-      }, Config.METRO_CHECK_INTERVAL);
-      return () => clearInterval(interval);
+        if (isMounted) timeoutId = setTimeout(checkMetro, Config.METRO_CHECK_INTERVAL);
+      };
+
+      checkMetro();
+      return () => {
+        isMounted = false;
+        clearTimeout(timeoutId);
+      };
     }
   }, [metroDisconnected]);
 
@@ -108,13 +118,55 @@ export default function AudioControllerScreen() {
   }, [isPlaying, duration]);
 
   useEffect(() => {
-    let statusInterval: any;
-    let queueInterval: any;
+    let isMounted = true;
+    let statusTimeout: any;
+    let queueTimeout: any;
+
+    const runStatusLoop = async () => {
+      if (!isMounted) return;
+
+      // Determine what to do based on current state (captured in closure or via refs if needed, 
+      // but since we are in useEffect dependent on guildId, we can use it directly)
+
+      try {
+        if (guildId) {
+          await fetchPlayerState();
+        } else {
+          await loadGuilds();
+        }
+      } catch (e) {
+        console.warn("Polling error:", e);
+      }
+
+      if (isMounted) {
+        statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
+      }
+    };
+
+    const runQueueLoop = async () => {
+      if (!isMounted) return;
+
+      try {
+        if (guildId && connectionStatus === 'connected') {
+          await fetchQueue();
+          await fetchSecurityStats();
+          // Ensure we get player state even if WS fails
+          await fetchPlayerState();
+        }
+      } catch (e) {
+        console.warn("Queue polling error:", e);
+      }
+
+      if (isMounted) {
+        queueTimeout = setTimeout(runQueueLoop, Config.POLL_INTERVAL_SLOW);
+      }
+    };
 
     const setupConnection = async () => {
       // 1. Fetch Config
       try {
         const config = await UkuleleApi.getConfig();
+        if (!isMounted) return;
         setUseWebsockets(config.useWebsockets);
 
         // 2. Decide Mode
@@ -125,45 +177,29 @@ export default function AudioControllerScreen() {
             // Derive WS URL from API URL (strip /api)
             const wsBase = API_BASE_URL.replace(/\/api$/, '');
             WebSocketService.connect(wsBase, () => {
-              WebSocketService.subscribe(`/topic/player/${guildId}`, (status: any) => {
-                handlePlayerStatusUpdate(status);
-              });
+              if (isMounted) {
+                WebSocketService.subscribe(`/topic/player/${guildId}`, (status: any) => {
+                  handlePlayerStatusUpdate(status);
+                });
+              }
             }, (err: any) => console.error("WS Error", err));
           }
         } else {
           // Polling Mode
           console.log("Switching to Polling mode");
-          statusInterval = setInterval(async () => {
-            if (guildId) {
-              await fetchPlayerState();
-            } else {
-              await loadGuilds();
-            }
-          }, Config.POLL_INTERVAL_FAST);
+          // Start the recursive status loop
+          // Wait for first interval before running
+          statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
         }
       } catch (e) {
+        if (!isMounted) return;
         console.warn("Failed to fetch config, defaulting to polling", e);
         // Fallback polling
-        statusInterval = setInterval(async () => {
-          if (guildId) {
-            await fetchPlayerState();
-          } else {
-            await loadGuilds();
-          }
-        }, Config.POLL_INTERVAL_FAST);
+        statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
       }
 
       // Queue & Security Polling (Always poll these for now, or move them to WS too later)
-      // Queue & Security Polling (Always poll these for now, or move them to WS too later)
-      queueInterval = setInterval(async () => {
-        if (guildId && connectionStatus === 'connected') {
-          await fetchQueue();
-          await fetchSecurityStats();
-          // Ensure we get player state even if WS fails
-          await fetchPlayerState();
-        }
-      }, Config.POLL_INTERVAL_SLOW);
-
+      queueTimeout = setTimeout(runQueueLoop, Config.POLL_INTERVAL_SLOW);
     };
 
     setupConnection();
@@ -172,8 +208,9 @@ export default function AudioControllerScreen() {
     if (!guildId) loadGuilds();
 
     return () => {
-      clearInterval(statusInterval);
-      clearInterval(queueInterval);
+      isMounted = false;
+      clearTimeout(statusTimeout);
+      clearTimeout(queueTimeout);
       WebSocketService.disconnect();
     };
   }, [guildId, connectionStatus]);

@@ -1,9 +1,11 @@
 import { Client } from '@stomp/stompjs';
 import { TextDecoder, TextEncoder } from 'text-encoding';
 
-// Polyfill for React Native
-if (typeof global.TextEncoder === 'undefined') {
+// Polyfill for React Native if needed
+if (typeof TextEncoder === 'undefined') {
     (global as any).TextEncoder = TextEncoder;
+}
+if (typeof TextDecoder === 'undefined') {
     (global as any).TextDecoder = TextDecoder;
 }
 
