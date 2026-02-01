@@ -1,8 +1,7 @@
 import { Config } from '@/constants/Config';
-import Constants from 'expo-constants';
 
 import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, BackHandler, LogBox, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, LogBox, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 LogBox.ignoreAllLogs();
@@ -50,41 +49,6 @@ export default function AudioControllerScreen() {
   // Channels
   const [channels, setChannels] = useState<VoiceChannelDto[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-
-
-
-  // Metro Connection Check
-  // Metro Connection Check
-  useEffect(() => {
-    if (__DEV__) {
-      const host = Constants.expoConfig?.hostUri || 'localhost:8081';
-      const metroUrl = `http://${host.split(':')[0]}:8081`;
-      let timeoutId: any;
-      let isMounted = true;
-
-      const checkMetro = async () => {
-        if (!isMounted) return;
-        const controller = new AbortController();
-        const timeoutIdReq = setTimeout(() => controller.abort(), Config.METRO_CHECK_TIMEOUT);
-        try {
-          await fetch(metroUrl, { method: 'HEAD', signal: controller.signal });
-          clearTimeout(timeoutIdReq);
-          if (metroDisconnected && isMounted) setMetroDisconnected(false);
-        } catch (e) {
-          clearTimeout(timeoutIdReq);
-          if (Platform.OS === 'android') BackHandler.exitApp();
-          else if (isMounted) setMetroDisconnected(true);
-        }
-        if (isMounted) timeoutId = setTimeout(checkMetro, Config.METRO_CHECK_INTERVAL);
-      };
-
-      checkMetro();
-      return () => {
-        isMounted = false;
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [metroDisconnected]);
 
   // AppState Reconnection
   useEffect(() => {
