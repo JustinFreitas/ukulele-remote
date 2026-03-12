@@ -3,8 +3,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { FlatList, StyleSheet, TouchableOpacity, View, TextInput, Alert, ActivityIndicator } from 'react-native';
 
 export type Track = {
     id: string;
@@ -18,14 +18,55 @@ type Props = {
     onPlay: (id: string, index: number) => void;
     onReorder?: (fromIndex: number, toIndex: number) => void;
     onLoadDefault: () => void;
+    onAddTrack?: (url: string) => Promise<void>;
 };
 
-export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault }: Props) {
+export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, onAddTrack }: Props) {
     const iconColor = useThemeColor({}, 'text');
+    const [addUrl, setAddUrl] = useState('');
+    const [isAdding, setIsAdding] = useState(false);
+
+    const handleAdd = async () => {
+        if (!addUrl.trim() || !onAddTrack) return;
+        setIsAdding(true);
+        try {
+            await onAddTrack(addUrl.trim());
+            setAddUrl('');
+        } catch (e: any) {
+            Alert.alert("Failed to queue", e.message);
+        } finally {
+            setIsAdding(false);
+        }
+    };
 
     return (
         <ThemedView style={styles.container}>
             <ThemedText type="subtitle" style={styles.header}>Queue</ThemedText>
+            
+            <View style={styles.addTrackContainer}>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Search or Paste URL..."
+                    placeholderTextColor="#888"
+                    value={addUrl}
+                    onChangeText={setAddUrl}
+                    onSubmitEditing={handleAdd}
+                    returnKeyType="search"
+                    editable={!isAdding}
+                />
+                <TouchableOpacity 
+                    style={[styles.addBtn, (!addUrl.trim() || isAdding) && { opacity: 0.5 }]} 
+                    onPress={handleAdd}
+                    disabled={!addUrl.trim() || isAdding}
+                >
+                    {isAdding ? (
+                        <ActivityIndicator color="white" size="small" />
+                    ) : (
+                        <Ionicons name="add" size={20} color="white" />
+                    )}
+                </TouchableOpacity>
+            </View>
+
             {queue.length === 0 ? (
                 <View style={{ alignItems: 'center', gap: 15, marginTop: 20 }}>
                     <ThemedText style={styles.emptyText}>Queue is empty</ThemedText>
@@ -69,6 +110,26 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         opacity: 0.7,
         marginTop: 10,
+    },
+    addTrackContainer: {
+        flexDirection: 'row',
+        marginBottom: 15,
+        gap: 10,
+    },
+    input: {
+        flex: 1,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 8,
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        color: '#000',
+    },
+    addBtn: {
+        backgroundColor: '#2196F3',
+        width: 40,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     itemContainer: {
         flexDirection: 'row',

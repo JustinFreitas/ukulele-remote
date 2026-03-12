@@ -558,6 +558,13 @@ export default function AudioControllerScreen() {
     }
   };
 
+  const handleAddTrack = async (url: string) => {
+    if (!guildId) return;
+    await UkuleleApi.play(guildId, url, selectedChannelId || undefined, autoFadeIn);
+    fetchPlayerState();
+    setTimeout(fetchQueue, 500);
+  };
+
 
   if (metroDisconnected) {
     return (
@@ -655,6 +662,7 @@ export default function AudioControllerScreen() {
           onPlay={handlePlayTrack}
           onReorder={handleReorder}
           onLoadDefault={handleLoadDefault}
+          onAddTrack={handleAddTrack}
         />
       </ThemedView>
       <View style={{ position: 'absolute', bottom: 20, right: 20, opacity: 0.5 }}>

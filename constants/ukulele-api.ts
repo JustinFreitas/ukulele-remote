@@ -97,11 +97,19 @@ export const UkuleleApi = {
     },
 
     play: async (guildId: string, url: string, channelId?: string, fadeIn?: boolean) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/play`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/play`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ url, channelId, fadeIn: fadeIn ? "true" : "false" }),
         });
+        if (!res.ok) {
+            let errorText = await res.text();
+            try {
+                const json = JSON.parse(errorText);
+                if (json.message) errorText = json.message;
+            } catch (e) {}
+            throw new Error(errorText || `Failed to play track (${res.status})`);
+        }
     },
     // ...
 
