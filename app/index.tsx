@@ -1,10 +1,8 @@
 import { Config } from '@/constants/Config';
 
 import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, LogBox, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-LogBox.ignoreAllLogs();
 
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { QueueList, Track } from '@/components/QueueList';
@@ -12,7 +10,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { VoiceChannelSelector } from '@/components/VoiceChannelSelector';
 import { API_BASE_URL, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import WebSocketService from '@/services/WebSocketService';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -29,9 +26,6 @@ export default function AudioControllerScreen() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [unauthorizedAttempts, setUnauthorizedAttempts] = useState(0);
-  const [metroDisconnected, setMetroDisconnected] = useState(false);
-
-
 
   // Seek bar state
   const [position, setPosition] = useState(0);
@@ -43,8 +37,6 @@ export default function AudioControllerScreen() {
   const preFadeVolume = useRef<number>(0.5);
   const [autoFadeIn, setAutoFadeIn] = useState(false);
   const lastTrackId = useRef<string | null>(null);
-
-  const iconColor = useThemeColor({}, 'text');
 
   // Channels
   const [channels, setChannels] = useState<VoiceChannelDto[]>([]);
@@ -163,13 +155,17 @@ export default function AudioControllerScreen() {
       }
 
       // Queue & Security Polling (Always poll these for now, or move them to WS too later)
-      queueTimeout = setTimeout(runQueueLoop, Config.POLL_INTERVAL_SLOW);
+      queueTimeout = setTimeout(() => {
+        void runQueueLoop();
+      }, Config.POLL_INTERVAL_SLOW);
     };
 
-    setupConnection();
+    void setupConnection();
 
     // Initial load
-    if (!guildId) loadGuilds();
+    if (!guildId) {
+      void loadGuilds();
+    }
 
     return () => {
       isMounted = false;
@@ -198,12 +194,12 @@ export default function AudioControllerScreen() {
         // Find a guild that is playing, or default to the first one
         const activeGuild = guilds.find(g => g.isPlaying) || guilds[0];
         setGuildId(activeGuild.id);
-        fetchChannels(activeGuild.id); // Fetch channels for the selected guild
+        void fetchChannels(activeGuild.id); // Fetch channels for the selected guild
         setConnectionStatus('connected');
         // console.log("DEBUG: calling fetchPlayerState from loadGuilds for", activeGuild.name);
-        fetchPlayerState(activeGuild.id);
-        fetchQueue();
-        fetchSecurityStats();
+        void fetchPlayerState(activeGuild.id);
+        void fetchQueue();
+        void fetchSecurityStats();
       }
 
     } catch (e: any) {
@@ -328,7 +324,7 @@ export default function AudioControllerScreen() {
     if (!guildId) return;
     try {
       await UkuleleApi.skip(guildId);
-      fetchPlayerState();
+      await fetchPlayerState();
     } catch (e: any) {
       console.error(e);
     }
@@ -448,11 +444,11 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const handleRemoveTrack = (id: string) => {
+  const handleRemoveTrack = (_id: string) => {
     Alert.alert("Removing tracks not supported yet via API");
   };
 
-  const handlePlayTrack = (id: string, index: number) => {
+  const handlePlayTrack = (_id: string, index: number) => {
     if (!guildId) return;
     Alert.alert(
       "Jump to Track?",
@@ -464,8 +460,8 @@ export default function AudioControllerScreen() {
           onPress: async () => {
             await UkuleleApi.skip(guildId, index);
             setTimeout(() => {
-              fetchPlayerState();
-              fetchQueue();
+              void fetchPlayerState();
+              void fetchQueue();
             }, 500);
           }
         }
@@ -473,7 +469,7 @@ export default function AudioControllerScreen() {
     );
   };
 
-  const handleReorder = (fromIndex: number, toIndex: number) => {
+  const handleReorder = (_fromIndex: number, _toIndex: number) => {
     Alert.alert("Reordering not supported yet");
   };
 
@@ -490,7 +486,7 @@ export default function AudioControllerScreen() {
           onPress: async () => {
             try {
               await UkuleleApi.stop(guildId);
-              fetchPlayerState();
+              await fetchPlayerState();
             } catch (e: any) {
               console.error(e);
             }
@@ -504,7 +500,7 @@ export default function AudioControllerScreen() {
     if (!guildId) return;
     try {
       await UkuleleApi.shuffle(guildId);
-      fetchPlayerState();
+      await fetchPlayerState();
     } catch (e: any) {
       console.error(e);
     }
@@ -549,9 +545,9 @@ export default function AudioControllerScreen() {
         await UkuleleApi.setVolume(guildId, 0);
       }
       await UkuleleApi.play(guildId, "", selectedChannelId || undefined, autoFadeIn);
-      fetchPlayerState();
-      setTimeout(fetchQueue, 500); // Give it a moment to load
-      setTimeout(() => fetchPlayerState(), 1000); // Check again once loaded
+      await fetchPlayerState();
+      setTimeout(() => { void fetchQueue(); }, 500); // Give it a moment to load
+      setTimeout(() => { void fetchPlayerState(); }, 1000); // Check again once loaded
     } catch (e: any) {
       console.error(e);
       Alert.alert("Failed to load default playlist", e.message);
@@ -561,22 +557,10 @@ export default function AudioControllerScreen() {
   const handleAddTrack = async (url: string) => {
     if (!guildId) return;
     await UkuleleApi.play(guildId, url, selectedChannelId || undefined, autoFadeIn);
-    fetchPlayerState();
-    setTimeout(fetchQueue, 500);
+    await fetchPlayerState();
+    setTimeout(() => { void fetchQueue(); }, 500);
   };
 
-
-  if (metroDisconnected) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: '#330000', justifyContent: 'center', alignItems: 'center' }]}>
-        <Ionicons name="cloud-offline" size={64} color="red" />
-        <ThemedText type="title" style={{ color: 'red', marginTop: 20 }}>Metro Disconnected</ThemedText>
-        <ThemedText style={{ color: '#ffaaaa', marginTop: 10, textAlign: 'center', paddingHorizontal: 20 }}>
-          The Expo development server is unreachable.
-        </ThemedText>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -605,7 +589,7 @@ export default function AudioControllerScreen() {
                     style: "destructive",
                     onPress: async () => {
                       await UkuleleApi.resetSecurityStats();
-                      fetchSecurityStats();
+                      await fetchSecurityStats();
                     }
                   }
                 ]
@@ -642,8 +626,8 @@ export default function AudioControllerScreen() {
           position={position}
           duration={duration}
           onSeek={handleSeek}
-          isReplayGain={!!serverStats.isReplayGain} // We need to store this in state
-          isReplayGainEnabled={!!serverStats.isReplayGainEnabled}
+          isReplayGain={serverStats.isReplayGain} // We need to store this in state
+          isReplayGainEnabled={serverStats.isReplayGainEnabled}
           hasNext={serverStats.queueSize > 0 || repeat || loop}
           onFadeIn={handleFadeIn}
           onFadeOut={handleFadeOut}

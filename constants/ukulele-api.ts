@@ -6,7 +6,10 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_UKULELE_API_URL || (Platform
 
 // In a real app, this would be in a secure storage or context
 // For this demo, we use a hardcoded token matching the default or local dev
-const API_TOKEN = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN || 'a055b204-4548-46d9-87e6-74627e3b440c';
+const API_TOKEN = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;
+
+console.log('[UkuleleApi] Base URL:', API_BASE_URL);
+console.log('[UkuleleApi] Token loaded:', API_TOKEN ? 'YES (starts with ' + API_TOKEN.substring(0, 4) + '...)' : 'NO (undefined)');
 
 const headers = {
     'Content-Type': 'application/json',
@@ -76,10 +79,14 @@ const fetchWithTimeout = async (resource: string, options: RequestInit = {}) => 
 
 export const UkuleleApi = {
     getGuilds: async (): Promise<GuildDto[]> => {
+        console.log('[UkuleleApi] Fetching guilds from:', `${API_BASE_URL}/guilds`);
         const res = await fetchWithTimeout(`${API_BASE_URL}/guilds?_t=${Date.now()}`, {
             headers: { ...headers, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         });
-        if (!res.ok) throw new Error('Failed to fetch guilds');
+        if (!res.ok) {
+            console.error(`[UkuleleApi] Failed to fetch guilds. Status: ${res.status} ${res.statusText}`);
+            throw new Error(`Failed to fetch guilds (Status: ${res.status})`);
+        }
         return res.json();
     },
 
