@@ -95,15 +95,15 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
             <SeekBar position={position} duration={duration} onSeek={onSeek} />
 
             <View style={styles.controls}>
-                <TouchableOpacity onPress={onPrev}>
+                <TouchableOpacity onPress={onPrev} testID="prev-button">
                     <Ionicons name="play-skip-back" size={32} color={iconColor} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={onPlayPause} style={styles.playButton}>
+                <TouchableOpacity onPress={onPlayPause} style={styles.playButton} testID="play-pause-button">
                     <Ionicons name={isPlaying ? "pause" : "play"} size={48} color={iconColor} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={onNext} disabled={!hasNext} style={{ opacity: hasNext ? 1.0 : 0.3 }}>
+                <TouchableOpacity onPress={onNext} disabled={!hasNext} style={{ opacity: hasNext ? 1.0 : 0.3 }} testID="next-button">
                     <Ionicons name="play-skip-forward" size={32} color={iconColor} />
                 </TouchableOpacity>
             </View>
