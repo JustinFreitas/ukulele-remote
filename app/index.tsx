@@ -11,7 +11,6 @@ import { ThemedView } from '@/components/themed-view';
 import { VoiceChannelSelector } from '@/components/VoiceChannelSelector';
 import { API_BASE_URL, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
 import WebSocketService from '@/services/WebSocketService';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function AudioControllerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -173,6 +172,7 @@ export default function AudioControllerScreen() {
       clearTimeout(queueTimeout);
       WebSocketService.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guildId, connectionStatus]);
 
   const fetchChannels = async (gid: string) => {
@@ -287,7 +287,7 @@ export default function AudioControllerScreen() {
     try {
       const stats = await UkuleleApi.getSecurityStats();
       setUnauthorizedAttempts(stats.unauthorizedAttempts);
-    } catch (e) {
+    } catch {
       // console.warn("Failed to fetch security stats");
     }
   };
@@ -301,7 +301,7 @@ export default function AudioControllerScreen() {
         title: t.title,
         artist: t.author
       })));
-    } catch (e) {
+    } catch {
       // console.warn("Failed to fetch queue");
     }
   };

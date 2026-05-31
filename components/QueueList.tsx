@@ -1,7 +1,6 @@
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, TouchableOpacity, View, TextInput, Alert, ActivityIndicator } from 'react-native';
@@ -22,7 +21,6 @@ type Props = {
 };
 
 export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, onAddTrack }: Props) {
-    const iconColor = useThemeColor({}, 'text');
     const [addUrl, setAddUrl] = useState('');
     const [isAdding, setIsAdding] = useState(false);
 
