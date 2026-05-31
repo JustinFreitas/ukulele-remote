@@ -1,50 +1,55 @@
-# Welcome to your Expo app 👋
+# Ukulele Remote 🎸
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Ukulele Remote is a mobile controller for the Ukulele music bot. It allows you to manage playback, view the queue, and switch voice channels directly from your phone.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Playback Control:** Play, pause, skip, and seek.
+- **Queue Management:** View and interact with the current music queue.
+- **Voice Channels:** Switch the bot between different voice channels in your server.
+- **Real-time Sync:** Uses WebSockets for instant status updates.
 
-   ```bash
-   npm install
-   ```
+## Prerequisites
 
-2. Start the app
+- [Node.js](https://nodejs.org/) (LTS recommended)
+- [Expo Go](https://expo.dev/go) app on your mobile device (or an emulator)
+- A running instance of the Ukulele API
 
-   ```bash
-   npx expo start
-   ```
+## Getting Started
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Install dependencies
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Configure Environment Variables
 
-## Learn more
+Copy the example environment file and fill in your specific API details:
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+cp .env.example .env
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Edit `.env` and set:
+- `EXPO_PUBLIC_UKULELE_API_URL`: The URL of your Ukulele API.
+- `EXPO_PUBLIC_UKULELE_API_TOKEN`: Your API bearer token.
 
-## Join the community
+### 3. Start the app
 
-Join our community of developers creating universal apps.
+```bash
+npx expo start
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- **Android:** Press `a` or scan the QR code in Expo Go.
+- **iOS:** Press `i` or scan the QR code in the Camera app.
+- **Web:** Press `w`.
+
+## Technical Details
+
+- **Framework:** [Expo](https://expo.dev) / [React Native](https://reactnative.dev/)
+- **State:** React Hooks & WebSockets (via STOMP)
+- **Styling:** Themed components with Light/Dark mode support.
+
+---
+Created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).

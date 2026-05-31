@@ -1,15 +1,15 @@
 import { Platform } from 'react-native';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_UKULELE_API_URL || (Platform.OS === 'android'
-    ? 'http://10.0.2.2:11111/api'
-    : 'http://localhost:11111/api');
+    ? 'http://10.0.2.2:8080/api'
+    : 'http://localhost:8080/api');
 
 // In a real app, this would be in a secure storage or context
 // For this demo, we use a hardcoded token matching the default or local dev
 const API_TOKEN = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;
 
 console.log('[UkuleleApi] Base URL:', API_BASE_URL);
-console.log('[UkuleleApi] Token loaded:', API_TOKEN ? 'YES (starts with ' + API_TOKEN.substring(0, 4) + '...)' : 'NO (undefined)');
+console.log('[UkuleleApi] Token loaded:', API_TOKEN ? 'YES' : 'NO (undefined)');
 
 const headers = {
     'Content-Type': 'application/json',
