@@ -84,6 +84,27 @@ class WebSocketService {
             this.subscriptions = {};
         }
     }
+
+    /**
+     * Returns true if the STOMP client believes it has a live connection.
+     * After OS suspension the socket can be dead while still reporting active,
+     * so callers should treat this as a hint, not a guarantee.
+     */
+    isConnected(): boolean {
+        return !!this.client && this.client.connected;
+    }
+
+    /**
+     * Force the underlying socket to drop and reconnect. Useful when the app
+     * returns to the foreground and we suspect the socket died while suspended.
+     * stompjs re-establishes the connection (and fires onConnect) via its
+     * configured reconnectDelay.
+     */
+    forceReconnect() {
+        if (this.client && this.client.active) {
+            this.client.forceDisconnect();
+        }
+    }
 }
 
 export default new WebSocketService();

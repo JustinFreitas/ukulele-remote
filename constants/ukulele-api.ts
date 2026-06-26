@@ -4,16 +4,16 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_UKULELE_API_URL || (Platform
     ? 'http://10.0.2.2:8080/api'
     : 'http://localhost:8080/api');
 
-// In a real app, this would be in a secure storage or context
-// For this demo, we use a hardcoded token matching the default or local dev
+// The token is bundled into the client at build time via EXPO_PUBLIC_*, so it
+// is not secret. This is intended for trusted/LAN use of the remote API.
 const API_TOKEN = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;
 
-console.log('[UkuleleApi] Base URL:', API_BASE_URL);
-console.log('[UkuleleApi] Token loaded:', API_TOKEN ? 'YES' : 'NO (undefined)');
-
+// Disable caching on every request so player/queue state never goes stale.
 const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_TOKEN}`
+    'Authorization': `Bearer ${API_TOKEN}`,
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
 };
 
 export interface GuildDto {
@@ -34,7 +34,7 @@ export interface TrackDto {
 
 export interface PlayerStatusDto {
     guildId: string;
-    paused: boolean;
+    isPaused: boolean;
     volume: number;
     repeatTrack: boolean;
     queueLooping: boolean;
@@ -79,12 +79,8 @@ const fetchWithTimeout = async (resource: string, options: RequestInit = {}) => 
 
 export const UkuleleApi = {
     getGuilds: async (): Promise<GuildDto[]> => {
-        console.log('[UkuleleApi] Fetching guilds from:', `${API_BASE_URL}/guilds`);
-        const res = await fetchWithTimeout(`${API_BASE_URL}/guilds?_t=${Date.now()}`, {
-            headers: { ...headers, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-        });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/guilds?_t=${Date.now()}`, { headers });
         if (!res.ok) {
-            console.error(`[UkuleleApi] Failed to fetch guilds. Status: ${res.status} ${res.statusText}`);
             throw new Error(`Failed to fetch guilds (Status: ${res.status})`);
         }
         return res.json();
@@ -107,14 +103,14 @@ export const UkuleleApi = {
         const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/play`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ url, channelId, fadeIn: fadeIn ? "true" : "false" }),
+            body: JSON.stringify({ url, channelId, fadeIn: !!fadeIn }),
         });
         if (!res.ok) {
             let errorText = await res.text();
             try {
                 const json = JSON.parse(errorText);
                 if (json.message) errorText = json.message;
-            } catch (e) {}
+            } catch {}
             throw new Error(errorText || `Failed to play track (${res.status})`);
         }
     },
