@@ -95,7 +95,7 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
             <SeekBar position={position} duration={duration} onSeek={onSeek} />
 
             <View style={styles.controls}>
-                <TouchableOpacity onPress={onPrev} testID="prev-button">
+                <TouchableOpacity onPress={onPrev} style={{ opacity: 0.3 }} testID="prev-button">
                     <Ionicons name="play-skip-back" size={32} color={iconColor} />
                 </TouchableOpacity>
 
@@ -121,18 +121,6 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
                     </View>
                 </View>
                 <View style={{ width: 45, alignItems: 'center', justifyContent: 'center' }}>
-                    {minVolume !== undefined && maxVolume !== undefined && (
-                        <ThemedText style={{
-                            fontSize: 10,
-                            opacity: 0.5,
-                            position: 'absolute',
-                            top: -14,
-                            width: 80,
-                            textAlign: 'center'
-                        }}>
-                            ({minVolume}-{maxVolume})
-                        </ThemedText>
-                    )}
                     <ThemedText style={{ textAlign: 'center' }}>
                         {Math.round(volume * 100)}%
                     </ThemedText>

@@ -17,7 +17,7 @@ export default function AudioControllerScreen() {
   const [volume, setVolume] = useState(0.5);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
-  const [serverStats, setServerStats] = useState({ minVolume: 0, maxVolume: 100, isReplayGain: false, isReplayGainEnabled: false, queueSize: 0 });
+  const [serverStats, setServerStats] = useState({ minVolume: 0, maxVolume: 80, isReplayGain: false, isReplayGainEnabled: false, queueSize: 0 });
   const [useWebsockets, setUseWebsockets] = useState(false);
   const [guildId, setGuildId] = useState<string | null>(null);
   const [repeat, setRepeat] = useState(false);
@@ -31,6 +31,15 @@ export default function AudioControllerScreen() {
   const [duration, setDuration] = useState(0);
   const lastVolumeUpdate = useRef(0);
 
+  // Polling intervals (overridden by server config when available)
+  const pollIntervalFast = useRef(Config.POLL_INTERVAL_FAST);
+  const pollIntervalSlow = useRef(Config.POLL_INTERVAL_SLOW);
+
+  // Mirror connectionStatus into a ref so polling loops can read it without
+  // being torn down and rebuilt every time the status changes.
+  const connectionStatusRef = useRef(connectionStatus);
+  connectionStatusRef.current = connectionStatus;
+
   // Fade state
   const fadeInterval = useRef<any>(null);
   const preFadeVolume = useRef<number>(0.5);
@@ -42,24 +51,20 @@ export default function AudioControllerScreen() {
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
   // AppState Reconnection
+  // When the app returns to the foreground the WebSocket may have been silently
+  // killed by the OS while suspended. stompjs would only notice on its next
+  // heartbeat (~20s), so force a reconnect immediately to resync faster.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active' && useWebsockets) {
-        console.log("App active, checking connection...");
-        // If we are "connected" in state but the socket is actually dead/closed from OS suspension,
-        // we need to encourage a reconnect.
-        // However, WebSocketService handle logic is "if active, do nothing".
-        // We might want to force a heartbeat or just rely on STOMP's keepalive which might be dead.
-        // Simplest for now: if connectionStatus is error/connecting, it will auto-retry.
-        // If it SAYS connected but is dead, stompjs usually finds out on next heartbeat (20s).
-        // To be faster, we could disconnect/reconnect if it's been in background > 1 min, but let's stick to default first.
+        WebSocketService.forceReconnect();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [useWebsockets, connectionStatus]);
+  }, [useWebsockets]);
 
   // Dead Reckoning Effect
   useEffect(() => {
@@ -94,7 +99,7 @@ export default function AudioControllerScreen() {
       }
 
       if (isMounted) {
-        statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
+        statusTimeout = setTimeout(runStatusLoop, pollIntervalFast.current);
       }
     };
 
@@ -102,8 +107,9 @@ export default function AudioControllerScreen() {
       if (!isMounted) return;
 
       try {
-        if (guildId && connectionStatus === 'connected') {
-          await fetchQueue();
+        // Read status from a ref so this loop isn't torn down on every status change.
+        if (guildId && connectionStatusRef.current === 'connected') {
+          await fetchQueue(guildId);
           await fetchSecurityStats();
           // Ensure we get player state even if WS fails
           await fetchPlayerState();
@@ -113,7 +119,7 @@ export default function AudioControllerScreen() {
       }
 
       if (isMounted) {
-        queueTimeout = setTimeout(runQueueLoop, Config.POLL_INTERVAL_SLOW);
+        queueTimeout = setTimeout(runQueueLoop, pollIntervalSlow.current);
       }
     };
 
@@ -123,6 +129,10 @@ export default function AudioControllerScreen() {
         const config = await UkuleleApi.getConfig();
         if (!isMounted) return;
         setUseWebsockets(config.useWebsockets);
+
+        // Honor server-provided poll intervals when present.
+        if (config.pollIntervalFast > 0) pollIntervalFast.current = config.pollIntervalFast;
+        if (config.pollIntervalSlow > 0) pollIntervalSlow.current = config.pollIntervalSlow;
 
         // 2. Decide Mode
         if (config.useWebsockets) {
@@ -144,19 +154,19 @@ export default function AudioControllerScreen() {
           console.log("Switching to Polling mode");
           // Start the recursive status loop
           // Wait for first interval before running
-          statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
+          statusTimeout = setTimeout(runStatusLoop, pollIntervalFast.current);
         }
       } catch (e) {
         if (!isMounted) return;
         console.warn("Failed to fetch config, defaulting to polling", e);
         // Fallback polling
-        statusTimeout = setTimeout(runStatusLoop, Config.POLL_INTERVAL_FAST);
+        statusTimeout = setTimeout(runStatusLoop, pollIntervalFast.current);
       }
 
       // Queue & Security Polling (Always poll these for now, or move them to WS too later)
       queueTimeout = setTimeout(() => {
         void runQueueLoop();
-      }, Config.POLL_INTERVAL_SLOW);
+      }, pollIntervalSlow.current);
     };
 
     void setupConnection();
@@ -173,7 +183,7 @@ export default function AudioControllerScreen() {
       WebSocketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guildId, connectionStatus]);
+  }, [guildId]);
 
   const fetchChannels = async (gid: string) => {
     try {
@@ -198,7 +208,7 @@ export default function AudioControllerScreen() {
         setConnectionStatus('connected');
         // console.log("DEBUG: calling fetchPlayerState from loadGuilds for", activeGuild.name);
         void fetchPlayerState(activeGuild.id);
-        void fetchQueue();
+        void fetchQueue(activeGuild.id);
         void fetchSecurityStats();
       }
 
@@ -234,7 +244,7 @@ export default function AudioControllerScreen() {
       setErrorMessage(null);
     }
 
-    setIsPlaying(!status.paused);
+    setIsPlaying(!status.isPaused);
 
     // Position Sync
     // Only sync if difference is significant (>2s) to avoid jitter fighting local interpolation
@@ -292,10 +302,11 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const fetchQueue = async () => {
-    if (!guildId) return;
+  const fetchQueue = async (overrideGuildId?: string) => {
+    const targetId = overrideGuildId || guildId;
+    if (!targetId) return;
     try {
-      const tracks = await UkuleleApi.getQueue(guildId);
+      const tracks = await UkuleleApi.getQueue(targetId);
       setQueue(tracks.map((t, i) => ({
         id: t.uri + i,
         title: t.title,
