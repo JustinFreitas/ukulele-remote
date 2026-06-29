@@ -30,6 +30,7 @@ export interface TrackDto {
     duration: number;
     position: number;
     isReplayGain: boolean;
+    replayGainDb: number | null;
 }
 
 export interface PlayerStatusDto {

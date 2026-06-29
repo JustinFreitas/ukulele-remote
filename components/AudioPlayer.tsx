@@ -21,6 +21,7 @@ type Props = {
     duration: number;
     onSeek: (position: number) => void;
     isReplayGain?: boolean;
+    replayGainDb?: number | null;
     isReplayGainEnabled?: boolean;
     hasNext?: boolean;
     onFadeIn: () => void;
@@ -34,7 +35,7 @@ type Props = {
     autoFadeIn: boolean;
 };
 
-export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, isReplayGainEnabled, hasNext = true, onFadeIn, onFadeOut, onStop, onShuffle, onToggleRepeat, onToggleLoop, repeat, loop, autoFadeIn }: Props) {
+export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, replayGainDb, isReplayGainEnabled, hasNext = true, onFadeIn, onFadeOut, onStop, onShuffle, onToggleRepeat, onToggleLoop, repeat, loop, autoFadeIn }: Props) {
     const iconColor = useThemeColor({}, 'text');
     const trackColor = useThemeColor({ light: '#e0e0e0', dark: '#333333' }, 'text');
     const [barWidth, setBarWidth] = React.useState(0);
@@ -86,6 +87,11 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
                     }}>
                         <ThemedText style={{ fontSize: 11, lineHeight: 14, fontWeight: 'bold', color: 'white', textAlign: 'center', includeFontPadding: false }}>RG</ThemedText>
                     </View>
+                )}
+                {isReplayGainEnabled && currentTrack && replayGainDb != null && (
+                    <ThemedText style={{ fontSize: 12, opacity: 0.7, marginRight: 6, marginTop: 3 }}>
+                        {`${replayGainDb >= 0 ? '+' : ''}${replayGainDb.toFixed(1)} dB`}
+                    </ThemedText>
                 )}
                 <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
                     {currentTrack || 'No Track Playing'}
