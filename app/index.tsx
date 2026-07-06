@@ -40,6 +40,12 @@ export default function AudioControllerScreen() {
   const connectionStatusRef = useRef(connectionStatus);
   connectionStatusRef.current = connectionStatus;
 
+  // Ref to hold the latest player status update handler to avoid stale closures
+  const statusUpdateRef = useRef<(status: any) => void>(() => {});
+  useEffect(() => {
+    statusUpdateRef.current = handlePlayerStatusUpdate;
+  });
+
   // Fade state
   const fadeInterval = useRef<any>(null);
   const preFadeVolume = useRef<number>(0.5);
@@ -141,13 +147,30 @@ export default function AudioControllerScreen() {
           if (guildId) {
             // Derive WS URL from API URL (strip /api)
             const wsBase = API_BASE_URL.replace(/\/api$/, '');
-            WebSocketService.connect(wsBase, () => {
-              if (isMounted) {
-                WebSocketService.subscribe(`/topic/player/${guildId}`, (status: any) => {
-                  handlePlayerStatusUpdate(status);
-                });
+            WebSocketService.connect(
+              wsBase,
+              () => {
+                if (isMounted) {
+                  setConnectionStatus('connected');
+                  setErrorMessage(null);
+                  WebSocketService.subscribe(`/topic/player/${guildId}`, (status: any) => {
+                    statusUpdateRef.current(status);
+                  });
+                }
+              },
+              () => {
+                if (isMounted) {
+                  setConnectionStatus('connecting');
+                }
+              },
+              (err: any) => {
+                if (isMounted) {
+                  console.error("WS Error", err);
+                  setConnectionStatus('error');
+                  setErrorMessage(err?.message || "WebSocket connection failed");
+                }
               }
-            }, (err: any) => console.error("WS Error", err));
+            );
           }
         } else {
           // Polling Mode
@@ -180,6 +203,9 @@ export default function AudioControllerScreen() {
       isMounted = false;
       clearTimeout(statusTimeout);
       clearTimeout(queueTimeout);
+      if (fadeInterval.current) {
+        clearInterval(fadeInterval.current);
+      }
       WebSocketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,7 +251,7 @@ export default function AudioControllerScreen() {
     try {
       const status = await UkuleleApi.getPlayer(targetId);
       // console.log("DEBUG: fetchPlayerState status:", JSON.stringify(status));
-      handlePlayerStatusUpdate(status);
+      statusUpdateRef.current(status);
     } catch (e: any) {
       console.error("fetchPlayerState error:", e);
       setConnectionStatus('error');
@@ -456,8 +482,17 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const handleRemoveTrack = (_id: string) => {
-    Alert.alert("Removing tracks not supported yet via API");
+  const handleRemoveTrack = async (id: string) => {
+    if (!guildId) return;
+    const index = queue.findIndex(t => t.id === id);
+    if (index === -1) return;
+    try {
+      await UkuleleApi.removeTrack(guildId, index);
+      // Let the socket status update update the queue size and trigger fetchQueue, or fetch now
+      await fetchQueue();
+    } catch (e: any) {
+      Alert.alert("Failed to remove track", e.message);
+    }
   };
 
   const handlePlayTrack = (_id: string, index: number) => {
@@ -481,8 +516,14 @@ export default function AudioControllerScreen() {
     );
   };
 
-  const handleReorder = (_fromIndex: number, _toIndex: number) => {
-    Alert.alert("Reordering not supported yet");
+  const handleReorder = async (fromIndex: number, toIndex: number) => {
+    if (!guildId) return;
+    try {
+      await UkuleleApi.reorderQueue(guildId, fromIndex, toIndex);
+      await fetchQueue();
+    } catch (e: any) {
+      Alert.alert("Failed to reorder queue", e.message);
+    }
   };
 
   const handleStop = async () => {

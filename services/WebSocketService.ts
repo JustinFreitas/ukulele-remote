@@ -13,10 +13,17 @@ class WebSocketService {
     private client: Client | null = null;
     private subscriptions: { [key: string]: any } = {};
 
-    connect(url: string, onConnect: () => void, onError: (err: any) => void) {
+    connect(
+        url: string,
+        onConnect: () => void,
+        onDisconnect: () => void,
+        onError: (err: any) => void
+    ) {
         if (this.client && this.client.active) {
             // console.log('[WS] Already connected, skipping init');
-            onConnect();
+            if (this.client.connected) {
+                onConnect();
+            }
             return;
         }
 
@@ -43,12 +50,20 @@ class WebSocketService {
                 // console.log('[WS] Connected');
                 onConnect();
             },
+            onDisconnect: () => {
+                onDisconnect();
+            },
             onStompError: (frame) => {
                 console.error('[WS] Broker reported error: ' + frame.headers['message']);
                 onError(frame.headers['message']);
             },
             onWebSocketError: (event) => {
                 console.error('[WS] WebSocket error:', event);
+                onError(event);
+            },
+            onWebSocketClose: (event) => {
+                console.log('[WS] WebSocket closed:', event);
+                onDisconnect();
             }
         });
 

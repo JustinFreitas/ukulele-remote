@@ -195,6 +195,24 @@ export const UkuleleApi = {
         return res.json();
     },
 
+    removeTrack: async (guildId: string, index: number) => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/remove`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ index })
+        });
+        if (!res.ok) throw new Error('Failed to remove track');
+    },
+
+    reorderQueue: async (guildId: string, fromIndex: number, toIndex: number) => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/reorder`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ fromIndex, toIndex })
+        });
+        if (!res.ok) throw new Error('Failed to reorder queue');
+    },
+
     getSecurityStats: async (): Promise<{ unauthorizedAttempts: number }> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/security/stats`, { headers });
         if (!res.ok) throw new Error('Failed to fetch security stats');

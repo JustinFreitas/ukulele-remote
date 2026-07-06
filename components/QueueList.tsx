@@ -1,6 +1,7 @@
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, TouchableOpacity, View, TextInput, Alert, ActivityIndicator } from 'react-native';
@@ -24,6 +25,11 @@ export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, o
     const [addUrl, setAddUrl] = useState('');
     const [isAdding, setIsAdding] = useState(false);
 
+    const inputBg = useThemeColor({ light: '#f0f0f0', dark: '#2c2c2e' }, 'background');
+    const inputText = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
+    const borderThemeColor = useThemeColor({ light: '#ccc', dark: '#3e3e42' }, 'icon');
+    const reorderIconColor = useThemeColor({}, 'icon');
+
     const handleAdd = async () => {
         if (!addUrl.trim() || !onAddTrack) return;
         setIsAdding(true);
@@ -43,7 +49,7 @@ export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, o
             
             <View style={styles.addTrackContainer}>
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: inputBg, color: inputText }]}
                     placeholder="Search or Paste URL..."
                     placeholderTextColor="#888"
                     value={addUrl}
@@ -79,9 +85,33 @@ export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, o
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item, index }) => (
-                        <ThemedView style={styles.itemContainer}>
+                        <ThemedView style={[styles.itemContainer, { borderBottomColor: borderThemeColor }]}>
+                            {onReorder && (
+                                <View style={styles.reorderControls}>
+                                    <TouchableOpacity 
+                                        style={[styles.reorderBtn, index === 0 && { opacity: 0.2 }]}
+                                        disabled={index === 0}
+                                        onPress={() => onReorder(index, index - 1)}
+                                    >
+                                        <Ionicons name="chevron-up" size={16} color={reorderIconColor} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.reorderBtn, index === queue.length - 1 && { opacity: 0.2 }]}
+                                        disabled={index === queue.length - 1}
+                                        onPress={() => onReorder(index, index + 1)}
+                                    >
+                                        <Ionicons name="chevron-down" size={16} color={reorderIconColor} />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                             <TouchableOpacity style={styles.trackInfo} onPress={() => onPlay(item.id, index)}>
                                 <ThemedText type="defaultSemiBold" style={styles.title}>{item.title}</ThemedText>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.removeButton} 
+                                onPress={() => onRemove(item.id)}
+                            >
+                                <Ionicons name="trash-outline" size={18} color="red" />
                             </TouchableOpacity>
                         </ThemedView>
                     )}
