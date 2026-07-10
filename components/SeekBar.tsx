@@ -38,7 +38,7 @@ export function SeekBar({ position, duration, onSeek }: Props) {
                 onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
                 onTouchEnd={handleTouch}
             >
-                <View style={[styles.progressBarBackground, { backgroundColor: trackColor }]}>
+                <View style={[styles.progressBarBackground, { backgroundColor: trackColor }]} pointerEvents="none">
                     <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: iconColor }]} />
                 </View>
             </View>

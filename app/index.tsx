@@ -52,6 +52,11 @@ export default function AudioControllerScreen() {
   const preFadeVolume = useRef<number>(0.5);
   const [autoFadeIn, setAutoFadeIn] = useState(false);
   const lastTrackId = useRef<string | null>(null);
+  
+  // Volume throttling refs
+  const lastVolumeApiCall = useRef<number>(0);
+  const volumeDebounceTimeout = useRef<any>(null);
+  const pendingVolumeInt = useRef<number | null>(null);
 
   // Channels
   const [channels, setChannels] = useState<VoiceChannelDto[]>([]);
@@ -386,12 +391,44 @@ export default function AudioControllerScreen() {
     if (!guildId) return;
     const clampedVol = Math.max(0, Math.min(1, newVol));
     const volInt = Math.round(clampedVol * 1000);
+    
+    // Update local UI immediately for smooth sliding
     lastVolumeUpdate.current = Date.now();
     setVolume(clampedVol);
-    try {
-      await UkuleleApi.setVolume(guildId, volInt);
-    } catch (e: any) {
-      console.error(e);
+
+    // Throttle API requests: send immediately if it has been > 300ms since the last call,
+    // otherwise debounce and send the final value after the user stops sliding.
+    pendingVolumeInt.current = volInt;
+
+    if (volumeDebounceTimeout.current) {
+      clearTimeout(volumeDebounceTimeout.current);
+      volumeDebounceTimeout.current = null;
+    }
+
+    const now = Date.now();
+    if (now - lastVolumeApiCall.current > 300) {
+      // Send immediately
+      lastVolumeApiCall.current = now;
+      pendingVolumeInt.current = null;
+      try {
+        await UkuleleApi.setVolume(guildId, volInt);
+      } catch (e: any) {
+        console.error("Volume API error:", e);
+      }
+    } else {
+      // Debounce and send the last value
+      volumeDebounceTimeout.current = setTimeout(async () => {
+        if (pendingVolumeInt.current !== null && guildId) {
+          const finalVol = pendingVolumeInt.current;
+          pendingVolumeInt.current = null;
+          lastVolumeApiCall.current = Date.now();
+          try {
+            await UkuleleApi.setVolume(guildId, finalVol);
+          } catch (e: any) {
+            console.error("Volume API error (debounced):", e);
+          }
+        }
+      }, 300);
     }
   };
 
