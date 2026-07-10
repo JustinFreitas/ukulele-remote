@@ -31,11 +31,11 @@ class WebSocketService {
         const wsUrl = url.replace(/^http/, 'ws') + '/ws';
         // console.log('[WS] Connecting to:', wsUrl);
 
-        // Send the apiToken on the STOMP CONNECT frame so the feed keeps working if the
-        // server enables config.requireWebsocketAuth. Harmless when auth is off. Token is
-        // inlined at build time via EXPO_PUBLIC_*, the same source as the REST client.
         const token = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;
-        const connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        const connectHeaders: Record<string, string> = {};
+        if (token) {
+            connectHeaders['Authorization'] = `Bearer ${token}`;
+        }
 
         this.client = new Client({
             brokerURL: wsUrl,
@@ -51,18 +51,22 @@ class WebSocketService {
                 onConnect();
             },
             onDisconnect: () => {
+                this.subscriptions = {};
                 onDisconnect();
             },
             onStompError: (frame) => {
                 console.error('[WS] Broker reported error: ' + frame.headers['message']);
+                this.subscriptions = {};
                 onError(frame.headers['message']);
             },
             onWebSocketError: (event) => {
                 console.error('[WS] WebSocket error:', event);
+                this.subscriptions = {};
                 onError(event);
             },
             onWebSocketClose: (event) => {
                 console.log('[WS] WebSocket closed:', event);
+                this.subscriptions = {};
                 onDisconnect();
             }
         });

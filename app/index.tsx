@@ -30,6 +30,7 @@ export default function AudioControllerScreen() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const lastVolumeUpdate = useRef(0);
+  const lastSeekTime = useRef(0);
 
   // Polling intervals (overridden by server config when available)
   const pollIntervalFast = useRef(Config.POLL_INTERVAL_FAST);
@@ -273,11 +274,14 @@ export default function AudioControllerScreen() {
     setIsPlaying(!status.isPaused);
 
     // Position Sync
-    // Only sync if difference is significant (>2s) to avoid jitter fighting local interpolation
+    // Only sync if difference is significant (>2s) to avoid jitter fighting local interpolation.
+    // Also ignore updates for 3s after a user seek to prevent optimistic state fightback.
     if (status.currentTrack) {
       setDuration(status.currentTrack.duration);
-      if (Math.abs(status.currentTrack.position - position) > 2000) {
-        setPosition(status.currentTrack.position);
+      if (Date.now() - lastSeekTime.current > 3000) {
+        if (Math.abs(status.currentTrack.position - position) > 2000) {
+          setPosition(status.currentTrack.position);
+        }
       }
     } else {
       setDuration(0);
@@ -380,9 +384,10 @@ export default function AudioControllerScreen() {
     }
 
     if (!guildId) return;
-    const volInt = Math.round(newVol * 1000);
+    const clampedVol = Math.max(0, Math.min(1, newVol));
+    const volInt = Math.round(clampedVol * 1000);
     lastVolumeUpdate.current = Date.now();
-    setVolume(newVol);
+    setVolume(clampedVol);
     try {
       await UkuleleApi.setVolume(guildId, volInt);
     } catch (e: any) {
@@ -475,6 +480,7 @@ export default function AudioControllerScreen() {
   const handleSeek = async (pos: number) => {
     if (!guildId) return;
     setPosition(pos); // Optimistic update
+    lastSeekTime.current = Date.now();
     try {
       await UkuleleApi.seek(guildId, pos);
     } catch (e: any) {
