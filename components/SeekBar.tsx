@@ -16,7 +16,8 @@ export function SeekBar({ position, duration, onSeek }: Props) {
 
     const handlePress = (e: any) => {
         if (barWidth === 0 || duration === 0) return;
-        const x = e.nativeEvent.locationX;
+        const x = e.nativeEvent.offsetX !== undefined ? e.nativeEvent.offsetX : e.nativeEvent.locationX;
+        if (x === undefined || isNaN(x)) return;
         const percentage = Math.min(1, Math.max(0, x / barWidth));
         onSeek(Math.round(percentage * duration));
     };

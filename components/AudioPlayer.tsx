@@ -73,7 +73,8 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
 
     const handleVolumePress = (e: any) => {
         if (barWidth === 0) return;
-        const x = e.nativeEvent.locationX;
+        const x = e.nativeEvent.offsetX !== undefined ? e.nativeEvent.offsetX : e.nativeEvent.locationX;
+        if (x === undefined || isNaN(x)) return;
         const newVolume = Math.min(1, Math.max(0, x / barWidth));
         onVolumeChange(newVolume);
     };
