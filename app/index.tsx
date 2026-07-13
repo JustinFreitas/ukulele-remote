@@ -12,6 +12,32 @@ import { VoiceChannelSelector } from '@/components/VoiceChannelSelector';
 import { API_BASE_URL, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
 import WebSocketService from '@/services/WebSocketService';
 
+if (Platform.OS === 'web') {
+  Alert.alert = (title: string, message?: string, buttons?: any[]) => {
+    const formattedMessage = message ? `${title}\n\n${message}` : title;
+    if (!buttons || buttons.length === 0) {
+      window.alert(formattedMessage);
+      return;
+    }
+
+    const hasCancel = buttons.some(b => b.style === 'cancel' || b.text?.toLowerCase() === 'cancel');
+    const confirmButton = buttons.find(b => b.style !== 'cancel' && b.text?.toLowerCase() !== 'cancel');
+
+    if (hasCancel && confirmButton) {
+      const confirmed = window.confirm(formattedMessage);
+      if (confirmed && confirmButton.onPress) {
+        confirmButton.onPress();
+      }
+    } else {
+      window.alert(formattedMessage);
+      const okButton = buttons[0];
+      if (okButton && okButton.onPress) {
+        okButton.onPress();
+      }
+    }
+  };
+}
+
 export default function AudioControllerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
