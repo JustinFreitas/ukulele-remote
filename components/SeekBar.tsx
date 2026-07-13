@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Pressable, Platform } from 'react-native';
 
 type Props = {
     position: number; // millseconds
@@ -14,7 +14,7 @@ export function SeekBar({ position, duration, onSeek }: Props) {
     const trackColor = useThemeColor({ light: '#e0e0e0', dark: '#333333' }, 'text');
     const [barWidth, setBarWidth] = useState(0);
 
-    const handleTouch = (e: any) => {
+    const handlePress = (e: any) => {
         if (barWidth === 0 || duration === 0) return;
         const x = e.nativeEvent.locationX;
         const percentage = Math.min(1, Math.max(0, x / barWidth));
@@ -33,15 +33,15 @@ export function SeekBar({ position, duration, onSeek }: Props) {
 
     return (
         <View style={styles.container}>
-            <View
+            <Pressable
                 style={styles.progressBarContainer}
                 onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-                onTouchEnd={handleTouch}
+                onPress={handlePress}
             >
                 <View style={[styles.progressBarBackground, { backgroundColor: trackColor }]} pointerEvents="none">
-                    <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: iconColor }]} />
+                    <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: iconColor }]} pointerEvents="none" />
                 </View>
-            </View>
+            </Pressable>
             <View style={styles.timeContainer}>
                 <ThemedText style={styles.timeText}>{formatTime(position)}</ThemedText>
                 <ThemedText style={styles.timeText}>{formatTime(duration)}</ThemedText>
@@ -59,7 +59,12 @@ const styles = StyleSheet.create({
     progressBarContainer: {
         height: 20,
         justifyContent: 'center',
-    },
+        ...Platform.select({
+            web: {
+                cursor: 'pointer'
+            }
+        })
+    } as any,
     progressBarBackground: {
         height: 4,
         borderRadius: 2,

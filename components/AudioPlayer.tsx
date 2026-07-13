@@ -5,7 +5,7 @@ import { Config } from '@/constants/Config';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Pressable, Platform } from 'react-native';
 
 type Props = {
     isPlaying: boolean;
@@ -71,7 +71,7 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
         }
     }
 
-    const handleTouch = (e: any) => {
+    const handleVolumePress = (e: any) => {
         if (barWidth === 0) return;
         const x = e.nativeEvent.locationX;
         const newVolume = Math.min(1, Math.max(0, x / barWidth));
@@ -124,16 +124,15 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
 
             <View style={styles.volumeContainer}>
                 <Ionicons name="volume-low" size={24} color={iconColor} />
-                <View
+                <Pressable
                     style={[styles.volumeBar, { height: 20, justifyContent: 'center' }]} // Increased height for touch target
                     onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-                    onTouchStart={handleTouch}
-                    onTouchMove={handleTouch}
+                    onPress={handleVolumePress}
                 >
-                    <View style={{ height: 5, backgroundColor: trackColor, borderRadius: 2, overflow: 'hidden', width: '100%' }}>
-                        <View style={[styles.volumeFill, { width: `${volume * 100}%`, backgroundColor: iconColor }]} />
+                    <View style={{ height: 5, backgroundColor: trackColor, borderRadius: 2, overflow: 'hidden', width: '100%' }} pointerEvents="none">
+                        <View style={[styles.volumeFill, { width: `${volume * 100}%`, backgroundColor: iconColor }]} pointerEvents="none" />
                     </View>
-                </View>
+                </Pressable>
                 <View style={{ width: 45, alignItems: 'center', justifyContent: 'center' }}>
                     <ThemedText style={{ textAlign: 'center' }}>
                         {Math.round(volume * 100)}%
@@ -233,7 +232,12 @@ const styles = StyleSheet.create({
     },
     volumeBar: {
         flex: 1,
-    },
+        ...Platform.select({
+            web: {
+                cursor: 'pointer'
+            }
+        })
+    } as any,
     volumeFill: {
         height: '100%',
     },
