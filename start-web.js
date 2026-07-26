@@ -8,7 +8,8 @@ const args = process.platform === 'win32'
   : ['expo', 'start', '--web', '--clear'];
 
 const child = spawn(command, args, {
-  stdio: 'inherit'
+  stdio: 'inherit',
+  windowsHide: true
 });
 
 child.on('exit', (code) => {
