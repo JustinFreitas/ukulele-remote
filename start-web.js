@@ -2,12 +2,17 @@ const { spawn } = require('child_process');
 
 process.env.CI = '1';
 
-// Launch expo start with --https flag to serve the app securely
-const child = spawn('npx.cmd', ['expo', 'start', '--web', '--https', '--clear'], {
-  shell: true,
+const command = process.platform === 'win32' ? 'cmd.exe' : 'npx';
+const args = process.platform === 'win32'
+  ? ['/c', 'npx', 'expo', 'start', '--web', '--clear']
+  : ['expo', 'start', '--web', '--clear'];
+
+const child = spawn(command, args, {
   stdio: 'inherit'
 });
 
 child.on('exit', (code) => {
-  process.exit(code);
+  process.exit(code || 0);
 });
+
+
