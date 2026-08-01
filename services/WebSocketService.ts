@@ -1,12 +1,12 @@
 import { Client } from '@stomp/stompjs';
-import { TextDecoder, TextEncoder } from 'text-encoding';
+import { TextDecoder as PolyfillTextDecoder, TextEncoder as PolyfillTextEncoder } from 'text-encoding';
 
 // Polyfill for React Native if needed
-if (typeof TextEncoder === 'undefined') {
-    (global as any).TextEncoder = TextEncoder;
+if (typeof global.TextEncoder === 'undefined') {
+    (global as any).TextEncoder = PolyfillTextEncoder;
 }
-if (typeof TextDecoder === 'undefined') {
-    (global as any).TextDecoder = TextDecoder;
+if (typeof global.TextDecoder === 'undefined') {
+    (global as any).TextDecoder = PolyfillTextDecoder;
 }
 
 class WebSocketService {
