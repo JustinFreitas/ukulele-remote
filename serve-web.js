@@ -21,6 +21,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, 'dist');
 const PORT = Number(process.env.UKULELE_REMOTE_PORT) || 8081;
@@ -118,14 +119,33 @@ const server = http.createServer((req, res) => {
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       return res.end('Internal Server Error');
     }
-    headers['Content-Length'] = stat.size;
-    res.writeHead(status, headers);
 
-    if (req.method === 'HEAD') return res.end();
+    if (req.method === 'HEAD') {
+      headers['Content-Length'] = stat.size;
+      res.writeHead(status, headers);
+      return res.end();
+    }
 
+    const acceptEncoding = req.headers['accept-encoding'] || '';
     const stream = fs.createReadStream(file);
     stream.on('error', () => res.destroy());
-    stream.pipe(res);
+
+    // Only compress compressible text/script/style/json assets
+    const compressible = /^(text\/|application\/(javascript|json|xml))/i.test(MIME[ext] || '');
+
+    if (compressible && acceptEncoding.match(/\bbr\b/)) {
+      headers['Content-Encoding'] = 'br';
+      res.writeHead(status, headers);
+      stream.pipe(zlib.createBrotliCompress()).pipe(res);
+    } else if (compressible && acceptEncoding.match(/\bgzip\b/)) {
+      headers['Content-Encoding'] = 'gzip';
+      res.writeHead(status, headers);
+      stream.pipe(zlib.createGzip()).pipe(res);
+    } else {
+      headers['Content-Length'] = stat.size;
+      res.writeHead(status, headers);
+      stream.pipe(res);
+    }
   });
 });
 
