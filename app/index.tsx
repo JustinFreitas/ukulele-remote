@@ -145,12 +145,13 @@ export default function AudioControllerScreen() {
       if (!isMounted) return;
 
       try {
-        // Read status from a ref so this loop isn't torn down on every status change.
-        if (guildId && connectionStatusRef.current === 'connected') {
+        if (guildId) {
           await fetchQueue(guildId);
           await fetchSecurityStats();
-          // Ensure we get player state even if WS fails
-          await fetchPlayerState();
+          // Always fetch player state over HTTP if WebSocket is disconnected or in error
+          if (!useWebsockets || connectionStatusRef.current !== 'connected') {
+            await fetchPlayerState();
+          }
         }
       } catch (e) {
         console.warn("Queue polling error:", e);
@@ -185,6 +186,8 @@ export default function AudioControllerScreen() {
                 if (isMounted) {
                   setConnectionStatus('connected');
                   setErrorMessage(null);
+                  void fetchPlayerState();
+                  void fetchQueue(guildId);
                   WebSocketService.subscribe(`/topic/player/${guildId}`, (status: any) => {
                     statusUpdateRef.current(status);
                   });
@@ -199,7 +202,8 @@ export default function AudioControllerScreen() {
                 if (isMounted) {
                   console.error("WS Error", err);
                   setConnectionStatus('error');
-                  setErrorMessage(err?.message || "WebSocket connection failed");
+                  const msg = typeof err === 'string' ? err : err?.message || "WebSocket connection failed";
+                  setErrorMessage(msg);
                 }
               }
             );
@@ -235,6 +239,9 @@ export default function AudioControllerScreen() {
       isMounted = false;
       clearTimeout(statusTimeout);
       clearTimeout(queueTimeout);
+      if (volumeDebounceTimeout.current) {
+        clearTimeout(volumeDebounceTimeout.current);
+      }
       if (fadeInterval.current) {
         clearInterval(fadeInterval.current);
       }

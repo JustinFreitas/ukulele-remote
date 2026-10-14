@@ -21,7 +21,14 @@ type Props = {
     onAddTrack?: (url: string) => Promise<void>;
 };
 
-export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, onAddTrack }: Props) {
+export const QueueList = React.memo(function QueueList({
+    queue,
+    onRemove,
+    onPlay,
+    onReorder,
+    onLoadDefault,
+    onAddTrack,
+}: Props) {
     const [addUrl, setAddUrl] = useState('');
     const [isAdding, setIsAdding] = useState(false);
 
@@ -119,7 +126,7 @@ export function QueueList({ queue, onRemove, onPlay, onReorder, onLoadDefault, o
             )}
         </ThemedView>
     );
-}
+});
 
 const styles = StyleSheet.create({
     container: {

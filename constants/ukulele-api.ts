@@ -78,6 +78,19 @@ const fetchWithTimeout = async (resource: string, options: RequestInit = {}) => 
     }
 };
 
+const ensureOk = async (res: Response, defaultMsg: string) => {
+    if (!res.ok) {
+        let errorText = '';
+        try {
+            errorText = await res.text();
+            const json = JSON.parse(errorText);
+            if (json.message) errorText = json.message;
+        } catch {}
+        throw new Error(errorText || `${defaultMsg} (${res.status})`);
+    }
+    return res;
+};
+
 export const UkuleleApi = {
     getGuilds: async (): Promise<GuildDto[]> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/guilds?_t=${Date.now()}`, { headers });
@@ -87,16 +100,15 @@ export const UkuleleApi = {
         return res.json();
     },
 
-
     getChannels: async (guildId: string): Promise<VoiceChannelDto[]> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/channels`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch channels');
+        await ensureOk(res, 'Failed to fetch channels');
         return res.json();
     },
 
     getPlayer: async (guildId: string): Promise<PlayerStatusDto> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch player status');
+        await ensureOk(res, 'Failed to fetch player status');
         return res.json();
     },
 
@@ -106,92 +118,95 @@ export const UkuleleApi = {
             headers,
             body: JSON.stringify({ url, channelId, fadeIn: !!fadeIn }),
         });
-        if (!res.ok) {
-            let errorText = await res.text();
-            try {
-                const json = JSON.parse(errorText);
-                if (json.message) errorText = json.message;
-            } catch {}
-            throw new Error(errorText || `Failed to play track (${res.status})`);
-        }
+        await ensureOk(res, 'Failed to play track');
     },
-    // ...
 
     pause: async (guildId: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/pause`, { method: 'POST', headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/pause`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to pause');
     },
 
     resume: async (guildId: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/resume`, { method: 'POST', headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/resume`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to resume');
     },
 
     skip: async (guildId: string, index?: number) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/skip`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/skip`, {
             method: 'POST',
             headers,
             body: index !== undefined ? JSON.stringify({ index }) : undefined
         });
+        await ensureOk(res, 'Failed to skip');
     },
 
     setVolume: async (guildId: string, volume: number) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/volume`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/volume`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ volume }),
         });
+        await ensureOk(res, 'Failed to set volume');
     },
 
     stop: async (guildId: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/stop`, { method: 'POST', headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/stop`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to stop');
     },
 
     shuffle: async (guildId: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/shuffle`, { method: 'POST', headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/shuffle`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to shuffle');
     },
 
     setRepeat: async (guildId: string, repeat: boolean) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/repeat`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/repeat`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ repeat })
         });
+        await ensureOk(res, 'Failed to set repeat');
     },
 
     setLoop: async (guildId: string, loop: boolean) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/loop`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/loop`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ loop })
         });
+        await ensureOk(res, 'Failed to set loop');
     },
 
     seek: async (guildId: string, position: number) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/seek`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/seek`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ position })
         });
+        await ensureOk(res, 'Failed to seek');
     },
 
     say: async (guildId: string, text: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/say`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/say`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ text })
         });
+        await ensureOk(res, 'Failed to say');
     },
 
     move: async (guildId: string, channelId: string) => {
-        await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/move`, {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/move`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ channelId })
         });
+        await ensureOk(res, 'Failed to move');
     },
 
     getQueue: async (guildId: string): Promise<TrackDto[]> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/queue`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch queue');
+        await ensureOk(res, 'Failed to fetch queue');
         return res.json();
     },
 
@@ -201,7 +216,7 @@ export const UkuleleApi = {
             headers,
             body: JSON.stringify({ index })
         });
-        if (!res.ok) throw new Error('Failed to remove track');
+        await ensureOk(res, 'Failed to remove track');
     },
 
     reorderQueue: async (guildId: string, fromIndex: number, toIndex: number) => {
@@ -210,22 +225,23 @@ export const UkuleleApi = {
             headers,
             body: JSON.stringify({ fromIndex, toIndex })
         });
-        if (!res.ok) throw new Error('Failed to reorder queue');
+        await ensureOk(res, 'Failed to reorder queue');
     },
 
     getSecurityStats: async (): Promise<{ unauthorizedAttempts: number }> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/security/stats`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch security stats');
+        await ensureOk(res, 'Failed to fetch security stats');
         return res.json();
     },
 
     resetSecurityStats: async () => {
-        await fetchWithTimeout(`${API_BASE_URL}/security/reset`, { method: 'POST', headers });
+        const res = await fetchWithTimeout(`${API_BASE_URL}/security/reset`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to reset security stats');
     },
 
     getConfig: async (): Promise<{ useWebsockets: boolean; pollIntervalFast: number; pollIntervalSlow: number }> => {
         const res = await fetchWithTimeout(`${API_BASE_URL}/config`, { headers });
-        if (!res.ok) throw new Error('Failed to fetch config');
+        await ensureOk(res, 'Failed to fetch config');
         return res.json();
     }
 };

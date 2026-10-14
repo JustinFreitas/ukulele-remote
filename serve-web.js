@@ -22,6 +22,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { pipeline } = require('stream');
+
+const assetCache = new Map();
 
 const ROOT = path.join(__dirname, 'dist');
 const PORT = Number(process.env.UKULELE_REMOTE_PORT) || 8081;
@@ -107,12 +110,21 @@ const server = http.createServer((req, res) => {
   }
 
   const ext = path.extname(file).toLowerCase();
-  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+  const headers = {
+    'Content-Type': MIME[ext] || 'application/octet-stream',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
+  };
 
-  // Asset filenames carry a content hash, so they can be cached hard. HTML must
-  // not be, or a rebuild never reaches the browser.
-  headers['Cache-Control'] =
-    ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable';
+  // Asset filenames carry a content hash, so they can be cached hard. Non-hashed
+  // root files (like favicon.ico) should revalidate, and HTML must not be cached.
+  const isHashedAsset = file.includes('_expo') || file.includes('assets');
+  headers['Cache-Control'] = ext === '.html'
+    ? 'no-cache'
+    : isHashedAsset
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=3600, must-revalidate';
 
   fs.stat(file, (err, stat) => {
     if (err) {
@@ -127,24 +139,50 @@ const server = http.createServer((req, res) => {
     }
 
     const acceptEncoding = req.headers['accept-encoding'] || '';
-    const stream = fs.createReadStream(file);
-    stream.on('error', () => res.destroy());
 
     // Only compress compressible text/script/style/json assets
     const compressible = /^(text\/|application\/(javascript|json|xml))/i.test(MIME[ext] || '');
 
     if (compressible && acceptEncoding.match(/\bbr\b/)) {
       headers['Content-Encoding'] = 'br';
+      const cached = assetCache.get(file + ':br');
+      if (cached) {
+        headers['Content-Length'] = cached.length;
+        res.writeHead(status, headers);
+        return res.end(cached);
+      }
+      const compressor = zlib.createBrotliCompress({
+        params: {
+          [zlib.constants.BROTLI_PARAM_QUALITY]: 4,
+        }
+      });
+      const chunks = [];
+      compressor.on('data', c => chunks.push(c));
+      compressor.on('end', () => {
+        if (isHashedAsset && chunks.length > 0) assetCache.set(file + ':br', Buffer.concat(chunks));
+      });
       res.writeHead(status, headers);
-      stream.pipe(zlib.createBrotliCompress()).pipe(res);
+      pipeline(fs.createReadStream(file), compressor, res, () => {});
     } else if (compressible && acceptEncoding.match(/\bgzip\b/)) {
       headers['Content-Encoding'] = 'gzip';
+      const cached = assetCache.get(file + ':gzip');
+      if (cached) {
+        headers['Content-Length'] = cached.length;
+        res.writeHead(status, headers);
+        return res.end(cached);
+      }
+      const compressor = zlib.createGzip({ level: 6 });
+      const chunks = [];
+      compressor.on('data', c => chunks.push(c));
+      compressor.on('end', () => {
+        if (isHashedAsset && chunks.length > 0) assetCache.set(file + ':gzip', Buffer.concat(chunks));
+      });
       res.writeHead(status, headers);
-      stream.pipe(zlib.createGzip()).pipe(res);
+      pipeline(fs.createReadStream(file), compressor, res, () => {});
     } else {
       headers['Content-Length'] = stat.size;
       res.writeHead(status, headers);
-      stream.pipe(res);
+      pipeline(fs.createReadStream(file), res, () => {});
     }
   });
 });

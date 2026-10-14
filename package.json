@@ -1,10 +1,9 @@
 {
   "name": "ukulele-remote",
   "main": "expo-router/entry",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -28,7 +27,7 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.9.38",
     "@react-navigation/native": "^7.1.8",
-    "@stomp/stompjs": "^7.3.0",
+    "@stomp/stompjs": "^7.4.0",
     "expo": "~54.0.37",
     "expo-constants": "~18.0.12",
     "expo-dev-client": "~6.0.21",

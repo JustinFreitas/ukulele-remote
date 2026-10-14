@@ -6,6 +6,9 @@ module.exports = {
     script: "serve-web.js",
     node_args: "--max-old-space-size=128",
     autorestart: true,
-    watch: false
+    watch: false,
+    env: {
+      NODE_ENV: "production"
+    }
   }]
 }

@@ -17,7 +17,11 @@ type Props = {
     onSelectChannel: (channelId: string) => void;
 };
 
-export function VoiceChannelSelector({ channels, selectedChannelId, onSelectChannel }: Props) {
+export const VoiceChannelSelector = React.memo(function VoiceChannelSelector({
+    channels,
+    selectedChannelId,
+    onSelectChannel,
+}: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const borderColor = useThemeColor({}, 'icon');
     const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#1c1c1e' }, 'background');
@@ -90,7 +94,7 @@ export function VoiceChannelSelector({ channels, selectedChannelId, onSelectChan
             </Modal>
         </>
     );
-}
+});
 
 const styles = StyleSheet.create({
     selector: {
