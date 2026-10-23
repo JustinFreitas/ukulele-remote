@@ -11,7 +11,7 @@ const API_TOKEN = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;
 // Disable caching on every request so player/queue state never goes stale.
 const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_TOKEN}`,
+    ...(API_TOKEN ? { 'Authorization': `Bearer ${API_TOKEN}` } : {}),
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache'
 };
@@ -56,15 +56,15 @@ export interface VoiceChannelDto {
 
 // ... 
 
-const fetchWithTimeout = async (resource: string, options: RequestInit = {}) => {
-    const { timeout = 2000 } = options as any;
+const fetchWithTimeout = async (resource: string, options: RequestInit & { timeout?: number } = {}) => {
+    const { timeout = 2000, ...fetchOptions } = options as any;
 
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
 
     try {
         const response = await fetch(resource, {
-            ...options,
+            ...fetchOptions,
             signal: controller.signal
         });
         clearTimeout(id);
@@ -117,6 +117,7 @@ export const UkuleleApi = {
             method: 'POST',
             headers,
             body: JSON.stringify({ url, channelId, fadeIn: !!fadeIn }),
+            timeout: 10000,
         });
         await ensureOk(res, 'Failed to play track');
     },

@@ -78,6 +78,16 @@ export default function AudioControllerScreen() {
   const preFadeVolume = useRef<number>(0.5);
   const [autoFadeIn, setAutoFadeIn] = useState(false);
   const lastTrackId = useRef<string | null>(null);
+  const lastQueueSize = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+  const actionTimeouts = useRef<any[]>([]);
+  const scheduleTimeout = (fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      actionTimeouts.current = actionTimeouts.current.filter(t => t !== id);
+      if (isMountedRef.current) fn();
+    }, ms);
+    actionTimeouts.current.push(id);
+  };
   
   // Volume throttling refs
   const lastVolumeApiCall = useRef<number>(0);
@@ -117,6 +127,7 @@ export default function AudioControllerScreen() {
 
   useEffect(() => {
     let isMounted = true;
+    isMountedRef.current = true;
     let statusTimeout: any;
     let queueTimeout: any;
 
@@ -237,6 +248,9 @@ export default function AudioControllerScreen() {
 
     return () => {
       isMounted = false;
+      isMountedRef.current = false;
+      actionTimeouts.current.forEach(clearTimeout);
+      actionTimeouts.current = [];
       clearTimeout(statusTimeout);
       clearTimeout(queueTimeout);
       if (volumeDebounceTimeout.current) {
@@ -264,6 +278,7 @@ export default function AudioControllerScreen() {
     // console.log("DEBUG: loadGuilds started");
     try {
       const guilds = await UkuleleApi.getGuilds();
+      if (!isMountedRef.current) return;
       // console.log("DEBUG: loadGuilds found:", guilds.length);
       if (guilds.length > 0) {
         // Find a guild that is playing, or default to the first one
@@ -278,6 +293,7 @@ export default function AudioControllerScreen() {
       }
 
     } catch (e: any) {
+      if (!isMountedRef.current) return;
       console.error('Failed to load guilds', e);
       setConnectionStatus('error');
       setErrorMessage(e.message || "Failed to connect to server");
@@ -343,6 +359,10 @@ export default function AudioControllerScreen() {
         setAutoFadeIn(false);
       }
       lastTrackId.current = newTrackId;
+      void fetchQueue(status.guildId);
+    } else if (status.queueSize !== undefined && status.queueSize !== lastQueueSize.current) {
+      lastQueueSize.current = status.queueSize;
+      void fetchQueue(status.guildId);
     }
     setCurrentTrack(status.currentTrack?.title || null);
     if (status.minVolume !== undefined) {
@@ -582,7 +602,7 @@ export default function AudioControllerScreen() {
           text: "Jump",
           onPress: async () => {
             await UkuleleApi.skip(guildId, index);
-            setTimeout(() => {
+            scheduleTimeout(() => {
               void fetchPlayerState();
               void fetchQueue();
             }, 500);
@@ -658,7 +678,7 @@ export default function AudioControllerScreen() {
   const handleChannelSelect = async (channelId: string) => {
     setSelectedChannelId(channelId);
     if (!guildId) return;
-    if (isPlaying) {
+    if (isPlaying || currentTrack !== null) {
       try {
         await UkuleleApi.move(guildId, channelId);
       } catch (e) {
@@ -675,8 +695,8 @@ export default function AudioControllerScreen() {
       }
       await UkuleleApi.play(guildId, "", selectedChannelId || undefined, autoFadeIn);
       await fetchPlayerState();
-      setTimeout(() => { void fetchQueue(); }, 500); // Give it a moment to load
-      setTimeout(() => { void fetchPlayerState(); }, 1000); // Check again once loaded
+      scheduleTimeout(() => { void fetchQueue(); }, 500); // Give it a moment to load
+      scheduleTimeout(() => { void fetchPlayerState(); }, 1000); // Check again once loaded
     } catch (e: any) {
       console.error(e);
       Alert.alert("Failed to load default playlist", e.message);
@@ -687,7 +707,7 @@ export default function AudioControllerScreen() {
     if (!guildId) return;
     await UkuleleApi.play(guildId, url, selectedChannelId || undefined, autoFadeIn);
     await fetchPlayerState();
-    setTimeout(() => { void fetchQueue(); }, 500);
+    scheduleTimeout(() => { void fetchQueue(); }, 500);
   };
 
 
