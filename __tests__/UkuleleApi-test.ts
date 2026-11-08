@@ -223,5 +223,35 @@ describe('UkuleleApi Methods', () => {
       expect.objectContaining({ method: 'POST' })
     );
   });
+
+  it('setFade sends POST request with fade boolean', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true });
+    await UkuleleApi.setFade('123', true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/player/123/fade`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ fade: true }),
+      })
+    );
+  });
+
+  it('fadeOut sends POST request', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true });
+    await UkuleleApi.fadeOut('123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/player/123/fade-out`,
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('fadeIn sends POST request', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true });
+    await UkuleleApi.fadeIn('123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/player/123/fade-in`,
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
 });
 

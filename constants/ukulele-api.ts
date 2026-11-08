@@ -46,6 +46,8 @@ export interface PlayerStatusDto {
     isReplayGainEnabled: boolean;
     queueSize: number;
     channelId?: string;
+    trackFade?: boolean;
+    isFadedOut?: boolean;
 }
 
 // ...
@@ -176,6 +178,25 @@ export const UkuleleApi = {
             body: JSON.stringify({ loop })
         });
         await ensureOk(res, 'Failed to set loop');
+    },
+
+    setFade: async (guildId: string, fade: boolean) => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/fade`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ fade })
+        });
+        await ensureOk(res, 'Failed to set fade');
+    },
+
+    fadeOut: async (guildId: string) => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/fade-out`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to fade out');
+    },
+
+    fadeIn: async (guildId: string) => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/player/${guildId}/fade-in`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to fade in');
     },
 
     seek: async (guildId: string, position: number) => {

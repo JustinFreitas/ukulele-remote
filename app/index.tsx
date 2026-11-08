@@ -74,9 +74,9 @@ export default function AudioControllerScreen() {
   });
 
   // Fade state
-  const fadeInterval = useRef<any>(null);
-  const preFadeVolume = useRef<number>(0.5);
   const [autoFadeIn, setAutoFadeIn] = useState(false);
+  const [isFadedOut, setIsFadedOut] = useState(false);
+  const lastFadeUpdate = useRef<number>(0);
   const lastTrackId = useRef<string | null>(null);
   const lastQueueSize = useRef<number>(0);
   const isMountedRef = useRef<boolean>(true);
@@ -256,9 +256,6 @@ export default function AudioControllerScreen() {
       if (volumeDebounceTimeout.current) {
         clearTimeout(volumeDebounceTimeout.current);
       }
-      if (fadeInterval.current) {
-        clearInterval(fadeInterval.current);
-      }
       WebSocketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -350,19 +347,24 @@ export default function AudioControllerScreen() {
     setRepeat(status.repeatTrack);
     setLoop(status.queueLooping);
 
-    // Auto Fade In Logic
+    // Track change & Server Fade State Sync
     const newTrackId = status.currentTrack?.uri || null;
     if (newTrackId !== lastTrackId.current) {
-      if (newTrackId && autoFadeIn) {
-        console.log("Auto Fade In Triggered");
-        performFadeIn();
-        setAutoFadeIn(false);
-      }
+      lastFadeUpdate.current = 0;
       lastTrackId.current = newTrackId;
       void fetchQueue(status.guildId);
     } else if (status.queueSize !== undefined && status.queueSize !== lastQueueSize.current) {
       lastQueueSize.current = status.queueSize;
       void fetchQueue(status.guildId);
+    }
+
+    if (Date.now() - lastFadeUpdate.current > 1500) {
+      if (status.trackFade !== undefined) {
+        setAutoFadeIn(status.trackFade);
+      }
+      if (status.isFadedOut !== undefined) {
+        setIsFadedOut(status.isFadedOut);
+      }
     }
     setCurrentTrack(status.currentTrack?.title || null);
     if (status.minVolume !== undefined) {
@@ -435,14 +437,11 @@ export default function AudioControllerScreen() {
   };
 
   const handleVolumeChange = async (newVol: number) => {
-    // If user manually changes volume, stop any active fade
-    if (fadeInterval.current) {
-      clearInterval(fadeInterval.current);
-      fadeInterval.current = null;
-    }
-
     if (!guildId) return;
     const clampedVol = Math.max(0, Math.min(1, newVol));
+    if (clampedVol > 0 && isFadedOut) {
+      setIsFadedOut(false);
+    }
     const volInt = Math.round(clampedVol * 1000);
     
     // Update local UI immediately for smooth sliding
@@ -485,85 +484,35 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const handleFadeOut = () => {
-    if (fadeInterval.current) clearInterval(fadeInterval.current);
-
-    // Save current volume to return to later (unless it's already near 0)
-    if (volume > 0.05) {
-      preFadeVolume.current = volume;
+  const handleFadeOut = async () => {
+    if (!guildId) return;
+    lastFadeUpdate.current = Date.now();
+    setIsFadedOut(true);
+    try {
+      await UkuleleApi.fadeOut(guildId);
+    } catch (e: any) {
+      console.error(e);
     }
-
-    const STEPS = 20;
-    const DURATION = 2000; // 2 seconds
-    const intervalTime = DURATION / STEPS;
-    const startVol = volume;
-    const step = startVol / STEPS;
-
-    let currentStep = 0;
-
-    fadeInterval.current = setInterval(() => {
-      currentStep++;
-      const newVol = Math.max(0, startVol - (step * currentStep));
-
-      // Update local state and invalidating sync lock
-      setVolume(newVol);
-      lastVolumeUpdate.current = Date.now();
-
-      // Fire and forget volume update
-      if (guildId) {
-        const volInt = Math.round(newVol * 1000);
-        UkuleleApi.setVolume(guildId, volInt).catch(() => { });
-      }
-
-      if (currentStep >= STEPS || newVol <= 0) {
-        clearInterval(fadeInterval.current);
-        fadeInterval.current = null;
-      }
-    }, intervalTime);
   };
 
-  const performFadeIn = () => {
-    if (fadeInterval.current) clearInterval(fadeInterval.current);
-
-    const targetVol = Math.max(0.1, preFadeVolume.current); // return to pre-fade or at least 10%
-    if (volume >= targetVol) return; // Already there
-
-    const STEPS = 20;
-    const DURATION = 2000; // 2 seconds
-    const intervalTime = DURATION / STEPS;
-    const startVol = volume;
-    const range = targetVol - startVol;
-    const step = range / STEPS;
-
-    let currentStep = 0;
-
-    fadeInterval.current = setInterval(() => {
-      currentStep++;
-      const newVol = Math.min(targetVol, startVol + (step * currentStep));
-
-      setVolume(newVol);
-      lastVolumeUpdate.current = Date.now();
-
-      if (guildId) {
-        const volInt = Math.round(newVol * 1000);
-        UkuleleApi.setVolume(guildId, volInt).catch(() => { });
+  const handleFadeIn = async () => {
+    if (!guildId) return;
+    lastFadeUpdate.current = Date.now();
+    if (isFadedOut) {
+      setIsFadedOut(false);
+      try {
+        await UkuleleApi.fadeIn(guildId);
+      } catch (e: any) {
+        console.error(e);
       }
-
-      if (currentStep >= STEPS || newVol >= targetVol) {
-        clearInterval(fadeInterval.current);
-        fadeInterval.current = null;
-      }
-    }, intervalTime);
-  };
-
-  const handleFadeIn = () => {
-    // If volume is basically silent, just fade in now
-    if (volume < 0.05) {
-      performFadeIn();
-      setAutoFadeIn(false); // Disarm if it was armed
     } else {
-      // Otherwise toggle the "Arm" state for the next track
-      setAutoFadeIn(!autoFadeIn);
+      const nextFade = !autoFadeIn;
+      setAutoFadeIn(nextFade);
+      try {
+        await UkuleleApi.setFade(guildId, nextFade);
+      } catch (e: any) {
+        console.error(e);
+      }
     }
   };
 
@@ -690,10 +639,7 @@ export default function AudioControllerScreen() {
   const handleLoadDefault = async () => {
     if (!guildId) return;
     try {
-      if (autoFadeIn) {
-        await UkuleleApi.setVolume(guildId, 0);
-      }
-      await UkuleleApi.play(guildId, "", selectedChannelId || undefined, autoFadeIn);
+      await UkuleleApi.play(guildId, "", selectedChannelId || undefined);
       await fetchPlayerState();
       scheduleTimeout(() => { void fetchQueue(); }, 500); // Give it a moment to load
       scheduleTimeout(() => { void fetchPlayerState(); }, 1000); // Check again once loaded
@@ -705,7 +651,7 @@ export default function AudioControllerScreen() {
 
   const handleAddTrack = async (url: string) => {
     if (!guildId) return;
-    await UkuleleApi.play(guildId, url, selectedChannelId || undefined, autoFadeIn);
+    await UkuleleApi.play(guildId, url, selectedChannelId || undefined);
     await fetchPlayerState();
     scheduleTimeout(() => { void fetchQueue(); }, 500);
   };
