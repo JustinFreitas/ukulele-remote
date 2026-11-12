@@ -59,4 +59,35 @@ describe('AudioPlayer UI Interactions', () => {
     // 0.5 + 0.05 = 0.55
     expect(mockProps.onVolumeChange).toHaveBeenCalledWith(0.55);
   });
+
+  it('preserves default small/medium/large steps (1/5/10) when range >= 100 (optimal <= 1)', () => {
+    const onVolumeChange = jest.fn();
+    const { getByText, queryByText } = render(
+      <AudioPlayer {...mockProps} minVolume={0} maxVolume={800} onVolumeChange={onVolumeChange} />
+    );
+
+    expect(getByText('-10')).toBeTruthy();
+    expect(getByText('-5')).toBeTruthy();
+    expect(getByText('-1')).toBeTruthy();
+    expect(getByText('+1')).toBeTruthy();
+    expect(getByText('+5')).toBeTruthy();
+    expect(getByText('+10')).toBeTruthy();
+    // Ensure medium step was NOT overwritten to 3
+    expect(queryByText('+3')).toBeNull();
+
+    fireEvent.press(getByText('+10'));
+    expect(onVolumeChange).toHaveBeenCalledWith(0.6);
+  });
+
+  it('scales volume steps dynamically when min/max range is narrow', () => {
+    const onVolumeChange = jest.fn();
+    // range = 30 -> optimal = ceil(100/30) = 4 -> medium = max(5, 12) = 12, large = max(10, 20) = 20
+    const { getByText } = render(
+      <AudioPlayer {...mockProps} minVolume={0} maxVolume={30} onVolumeChange={onVolumeChange} />
+    );
+
+    expect(getByText('+4')).toBeTruthy();
+    expect(getByText('+12')).toBeTruthy();
+    expect(getByText('+20')).toBeTruthy();
+  });
 });

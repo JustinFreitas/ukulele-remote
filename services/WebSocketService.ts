@@ -27,8 +27,8 @@ class WebSocketService {
             return;
         }
 
-        // Replace http/https with ws/wss
-        const wsUrl = url.replace(/^http/, 'ws') + '/ws';
+        // Replace http/https with ws/wss and strip trailing slashes before /ws
+        const wsUrl = url.replace(/\/+$/, '').replace(/^http/, 'ws') + '/ws';
         // console.log('[WS] Connecting to:', wsUrl);
 
         const token = process.env.EXPO_PUBLIC_UKULELE_API_TOKEN;

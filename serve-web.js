@@ -51,7 +51,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-if (!fs.existsSync(ROOT)) {
+if (!process.env.JEST_WORKER_ID && !fs.existsSync(ROOT)) {
   console.error(
     `[ukulele-remote] dist/ not found at ${ROOT}.\n` +
       `Run "npx expo export --platform web" before starting this server.`
@@ -67,10 +67,15 @@ const isFile = (p) => {
   }
 };
 
+function isHashedAssetFile(filePath, rootDir = ROOT) {
+  const rel = path.relative(rootDir, filePath).split(path.sep).join('/');
+  return rel.startsWith('_expo/static/') || rel.startsWith('assets/');
+}
+
 // Resolve a request path to a file inside dist/, or null if it escapes the root.
 // expo-router's static export writes one .html per route (index, modal,
 // _sitemap, +not-found), so "/modal" resolves to "modal.html".
-function resolveFile(urlPath) {
+function resolveFile(urlPath, rootDir = ROOT) {
   let decoded;
   try {
     decoded = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
@@ -78,8 +83,8 @@ function resolveFile(urlPath) {
     return null;
   }
 
-  const candidate = path.resolve(ROOT, '.' + path.posix.normalize(decoded));
-  if (candidate !== ROOT && !candidate.startsWith(ROOT + path.sep)) {
+  const candidate = path.resolve(rootDir, '.' + path.posix.normalize(decoded));
+  if (candidate !== rootDir && !candidate.startsWith(rootDir + path.sep)) {
     return null; // traversal attempt
   }
 
@@ -92,108 +97,128 @@ function resolveFile(urlPath) {
   return null;
 }
 
-const server = http.createServer((req, res) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { Allow: 'GET, HEAD' });
-    return res.end('Method Not Allowed');
-  }
-
-  let file = resolveFile(req.url || '/');
-  let status = 200;
-
-  if (!file) {
-    // Unknown route: hand back the router's not-found page so client-side
-    // routing still works, but with an honest status code.
-    const notFound = path.join(ROOT, '+not-found.html');
-    file = isFile(notFound) ? notFound : path.join(ROOT, 'index.html');
-    status = 404;
-  }
-
-  const ext = path.extname(file).toLowerCase();
-  const headers = {
-    'Content-Type': MIME[ext] || 'application/octet-stream',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'SAMEORIGIN',
-    'Referrer-Policy': 'strict-origin-when-cross-origin'
-  };
-
-  // Asset filenames carry a content hash, so they can be cached hard. Non-hashed
-  // root files (like favicon.ico) should revalidate, and HTML must not be cached.
-  const isHashedAsset = file.includes('_expo') || file.includes('assets');
-  headers['Cache-Control'] = ext === '.html'
-    ? 'no-cache'
-    : isHashedAsset
-      ? 'public, max-age=31536000, immutable'
-      : 'public, max-age=3600, must-revalidate';
-
-  fs.stat(file, (err, stat) => {
-    if (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      return res.end('Internal Server Error');
+function createStaticServer(rootDir = ROOT, cache = assetCache) {
+  return http.createServer((req, res) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { Allow: 'GET, HEAD' });
+      return res.end('Method Not Allowed');
     }
 
-    if (req.method === 'HEAD') {
-      headers['Content-Length'] = stat.size;
-      res.writeHead(status, headers);
-      return res.end();
+    let file = resolveFile(req.url || '/', rootDir);
+    let status = 200;
+
+    if (!file) {
+      // Unknown route: hand back the router's not-found page so client-side
+      // routing still works, but with an honest status code.
+      const notFound = path.join(rootDir, '+not-found.html');
+      file = isFile(notFound) ? notFound : path.join(rootDir, 'index.html');
+      status = 404;
     }
 
-    const acceptEncoding = req.headers['accept-encoding'] || '';
+    const ext = path.extname(file).toLowerCase();
+    const headers = {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
+    };
+
+    // Asset filenames under _expo/static/ and assets/ carry a content hash, so they
+    // can be cached hard. Non-hashed metadata/root files (like _expo/.routes.json
+    // or favicon.ico) must revalidate, and HTML must not be cached.
+    const isHashedAsset = isHashedAssetFile(file, rootDir);
+    headers['Cache-Control'] = ext === '.html'
+      ? 'no-cache'
+      : isHashedAsset
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=3600, must-revalidate';
 
     // Only compress compressible text/script/style/json assets
     const compressible = /^(text\/|application\/(javascript|json|xml))/i.test(MIME[ext] || '');
-
-    if (compressible && acceptEncoding.match(/\bbr\b/)) {
-      headers['Content-Encoding'] = 'br';
-      const cached = assetCache.get(file + ':br');
-      if (cached) {
-        headers['Content-Length'] = cached.length;
-        res.writeHead(status, headers);
-        return res.end(cached);
-      }
-      const compressor = zlib.createBrotliCompress({
-        params: {
-          [zlib.constants.BROTLI_PARAM_QUALITY]: 4,
-        }
-      });
-      const chunks = [];
-      compressor.on('data', c => chunks.push(c));
-      compressor.on('end', () => {
-        if (isHashedAsset && chunks.length > 0) assetCache.set(file + ':br', Buffer.concat(chunks));
-      });
-      res.writeHead(status, headers);
-      pipeline(fs.createReadStream(file), compressor, res, () => {});
-    } else if (compressible && acceptEncoding.match(/\bgzip\b/)) {
-      headers['Content-Encoding'] = 'gzip';
-      const cached = assetCache.get(file + ':gzip');
-      if (cached) {
-        headers['Content-Length'] = cached.length;
-        res.writeHead(status, headers);
-        return res.end(cached);
-      }
-      const compressor = zlib.createGzip({ level: 6 });
-      const chunks = [];
-      compressor.on('data', c => chunks.push(c));
-      compressor.on('end', () => {
-        if (isHashedAsset && chunks.length > 0) assetCache.set(file + ':gzip', Buffer.concat(chunks));
-      });
-      res.writeHead(status, headers);
-      pipeline(fs.createReadStream(file), compressor, res, () => {});
-    } else {
-      headers['Content-Length'] = stat.size;
-      res.writeHead(status, headers);
-      pipeline(fs.createReadStream(file), res, () => {});
+    if (compressible) {
+      headers['Vary'] = 'Accept-Encoding';
     }
-  });
-});
 
-server.listen(PORT, HOST, () => {
-  console.log(`[ukulele-remote] serving ${ROOT} on http://${HOST}:${PORT}`);
-});
+    fs.stat(file, (err, stat) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        return res.end('Internal Server Error');
+      }
 
-for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => {
-    console.log(`[ukulele-remote] ${sig} received, shutting down.`);
-    server.close(() => process.exit(0));
+      if (req.method === 'HEAD') {
+        headers['Content-Length'] = stat.size;
+        res.writeHead(status, headers);
+        return res.end();
+      }
+
+      const acceptEncoding = req.headers['accept-encoding'] || '';
+
+      if (compressible && acceptEncoding.match(/\bbr\b/)) {
+        headers['Content-Encoding'] = 'br';
+        const cached = cache.get(file + ':br');
+        if (cached) {
+          headers['Content-Length'] = cached.length;
+          res.writeHead(status, headers);
+          return res.end(cached);
+        }
+        const compressor = zlib.createBrotliCompress({
+          params: {
+            [zlib.constants.BROTLI_PARAM_QUALITY]: 4,
+          }
+        });
+        let chunks = null;
+        if (isHashedAsset) {
+          chunks = [];
+          compressor.on('data', c => chunks.push(c));
+        }
+        res.writeHead(status, headers);
+        pipeline(fs.createReadStream(file), compressor, res, (pipeErr) => {
+          if (!pipeErr && chunks && chunks.length > 0) {
+            cache.set(file + ':br', Buffer.concat(chunks));
+          }
+        });
+      } else if (compressible && acceptEncoding.match(/\bgzip\b/)) {
+        headers['Content-Encoding'] = 'gzip';
+        const cached = cache.get(file + ':gzip');
+        if (cached) {
+          headers['Content-Length'] = cached.length;
+          res.writeHead(status, headers);
+          return res.end(cached);
+        }
+        const compressor = zlib.createGzip({ level: 6 });
+        let chunks = null;
+        if (isHashedAsset) {
+          chunks = [];
+          compressor.on('data', c => chunks.push(c));
+        }
+        res.writeHead(status, headers);
+        pipeline(fs.createReadStream(file), compressor, res, (pipeErr) => {
+          if (!pipeErr && chunks && chunks.length > 0) {
+            cache.set(file + ':gzip', Buffer.concat(chunks));
+          }
+        });
+      } else {
+        headers['Content-Length'] = stat.size;
+        res.writeHead(status, headers);
+        pipeline(fs.createReadStream(file), res, () => {});
+      }
+    });
   });
 }
+
+if (!process.env.JEST_WORKER_ID) {
+  const server = createStaticServer();
+
+  server.listen(PORT, HOST, () => {
+    console.log(`[ukulele-remote] serving ${ROOT} on http://${HOST}:${PORT}`);
+  });
+
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => {
+      console.log(`[ukulele-remote] ${sig} received, shutting down.`);
+      server.close(() => process.exit(0));
+    });
+  }
+}
+
+module.exports = { createStaticServer, resolveFile, isHashedAssetFile };

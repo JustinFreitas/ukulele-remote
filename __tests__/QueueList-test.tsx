@@ -28,15 +28,18 @@ describe('QueueList', () => {
     expect(mockProps.onLoadDefault).toHaveBeenCalled();
   });
 
-  it('renders tracks when queue is populated', () => {
+  it('renders tracks and track artists when queue is populated', () => {
     const queue = [
-      { id: '1', title: 'First Song' },
+      { id: '1', title: 'First Song', artist: 'First Artist' },
       { id: '2', title: 'Second Song' },
+      { id: '3', title: 'Third Song', artist: '' },
     ];
     const { getByText } = render(<QueueList {...mockProps} queue={queue} />);
 
     expect(getByText('First Song')).toBeTruthy();
+    expect(getByText('First Artist')).toBeTruthy();
     expect(getByText('Second Song')).toBeTruthy();
+    expect(getByText('Third Song')).toBeTruthy();
   });
 
   it('calls onAddTrack when submitting new track URL', async () => {

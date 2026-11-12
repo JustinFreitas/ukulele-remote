@@ -113,6 +113,9 @@ export const QueueList = React.memo(function QueueList({
                             )}
                             <TouchableOpacity style={styles.trackInfo} onPress={() => onPlay(item.id, index)}>
                                 <ThemedText type="defaultSemiBold" style={styles.title}>{item.title}</ThemedText>
+                                {item.artist ? (
+                                    <ThemedText style={styles.artist}>{item.artist}</ThemedText>
+                                ) : null}
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.removeButton} 

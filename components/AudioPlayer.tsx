@@ -61,9 +61,9 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
         const range = maxVolume - minVolume;
         if (range > 0) {
             const optimal = Math.ceil(100 / range);
-            stepSmall = Math.max(optimal, 1); // At least 1%
-            stepMedium = stepSmall * 3; // 3x step
-            stepLarge = stepSmall * 5;  // 5x step
+            stepSmall = Math.max(optimal, Config.VOL_STEP_SMALL); // At least configured small step
+            stepMedium = Math.max(Config.VOL_STEP_MEDIUM, stepSmall * 3); // Preserve default when optimal <= 1
+            stepLarge = Math.max(Config.VOL_STEP_LARGE, stepSmall * 5);  // Preserve default when optimal <= 1
 
             // Cap at reasonable values if range is tiny
             if (stepMedium > 25) stepMedium = 25;

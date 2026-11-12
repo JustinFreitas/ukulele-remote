@@ -85,4 +85,15 @@ describe('WebSocketService', () => {
 
         expect(WebSocketService.isConnected()).toBe(true);
     });
+
+    it('strips trailing slashes before appending /ws and supports forceReconnect', () => {
+        WebSocketService.connect('https://example.com///', jest.fn(), jest.fn(), jest.fn());
+
+        expect(Client).toHaveBeenCalledWith(expect.objectContaining({
+            brokerURL: 'wss://example.com/ws',
+        }));
+
+        WebSocketService.forceReconnect();
+        expect(mockClientInstance.forceDisconnect).toHaveBeenCalledTimes(1);
+    });
 });
