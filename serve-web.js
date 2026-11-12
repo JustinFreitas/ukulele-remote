@@ -161,22 +161,26 @@ function createStaticServer(rootDir = ROOT, cache = assetCache) {
           res.writeHead(status, headers);
           return res.end(cached);
         }
+        const readStream = fs.createReadStream(file);
         const compressor = zlib.createBrotliCompress({
           params: {
             [zlib.constants.BROTLI_PARAM_QUALITY]: 4,
           }
         });
-        let chunks = null;
         if (isHashedAsset) {
-          chunks = [];
+          let sourceErr = false;
+          const chunks = [];
+          readStream.on('error', () => { sourceErr = true; });
+          compressor.on('error', () => { sourceErr = true; });
           compressor.on('data', c => chunks.push(c));
+          compressor.on('end', () => {
+            if (!sourceErr && chunks.length > 0) {
+              cache.set(file + ':br', Buffer.concat(chunks));
+            }
+          });
         }
         res.writeHead(status, headers);
-        pipeline(fs.createReadStream(file), compressor, res, (pipeErr) => {
-          if (!pipeErr && chunks && chunks.length > 0) {
-            cache.set(file + ':br', Buffer.concat(chunks));
-          }
-        });
+        pipeline(readStream, compressor, res, () => {});
       } else if (compressible && acceptEncoding.match(/\bgzip\b/)) {
         headers['Content-Encoding'] = 'gzip';
         const cached = cache.get(file + ':gzip');
@@ -185,18 +189,22 @@ function createStaticServer(rootDir = ROOT, cache = assetCache) {
           res.writeHead(status, headers);
           return res.end(cached);
         }
+        const readStream = fs.createReadStream(file);
         const compressor = zlib.createGzip({ level: 6 });
-        let chunks = null;
         if (isHashedAsset) {
-          chunks = [];
+          let sourceErr = false;
+          const chunks = [];
+          readStream.on('error', () => { sourceErr = true; });
+          compressor.on('error', () => { sourceErr = true; });
           compressor.on('data', c => chunks.push(c));
+          compressor.on('end', () => {
+            if (!sourceErr && chunks.length > 0) {
+              cache.set(file + ':gzip', Buffer.concat(chunks));
+            }
+          });
         }
         res.writeHead(status, headers);
-        pipeline(fs.createReadStream(file), compressor, res, (pipeErr) => {
-          if (!pipeErr && chunks && chunks.length > 0) {
-            cache.set(file + ':gzip', Buffer.concat(chunks));
-          }
-        });
+        pipeline(readStream, compressor, res, () => {});
       } else {
         headers['Content-Length'] = stat.size;
         res.writeHead(status, headers);

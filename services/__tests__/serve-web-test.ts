@@ -92,6 +92,16 @@ describe('serve-web static server hardening', () => {
     expect(zlib.brotliDecompressSync(brRes.body).toString('utf8')).toBe('console.log("hashed bundle");');
     expect(cache.size).toBe(1);
 
+    // 1b. Second request hits in-memory cache with deterministic Content-Length
+    const brHitRes = await httpGet(port, '/_expo/static/js/web/entry-abcdef123456.js', {
+      'Accept-Encoding': 'br, gzip',
+    });
+    expect(brHitRes.statusCode).toBe(200);
+    expect(brHitRes.headers['content-encoding']).toBe('br');
+    expect(brHitRes.headers['vary']).toBe('Accept-Encoding');
+    expect(brHitRes.headers['content-length']).toBe(String(brRes.body.length));
+    expect(brHitRes.body.equals(brRes.body)).toBe(true);
+
     // 2. Unhashed _expo/.routes.json with Gzip -> must-revalidate (NOT immutable), Vary: Accept-Encoding, NOT cached in memory
     const routesRes = await httpGet(port, '/_expo/.routes.json', {
       'Accept-Encoding': 'gzip',
