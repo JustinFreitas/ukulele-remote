@@ -1,6 +1,6 @@
-
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CacheStatsDto, TrackCacheState } from '@/constants/ukulele-api';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
@@ -10,6 +10,7 @@ export type Track = {
     id: string;
     title: string;
     artist?: string;
+    cacheState?: TrackCacheState;
 };
 
 type Props = {
@@ -19,7 +20,23 @@ type Props = {
     onReorder?: (fromIndex: number, toIndex: number) => void;
     onLoadDefault: () => void;
     onAddTrack?: (url: string) => Promise<void>;
+    cacheStats?: CacheStatsDto | null;
+    onClearCache?: () => Promise<void> | void;
 };
+
+function formatBytes(bytes: number): string {
+    const safe = Math.max(0, bytes || 0);
+    if (safe >= 1024 * 1024 * 1024) {
+        return `${(safe / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+    if (safe >= 1024 * 1024) {
+        return `${(safe / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (safe >= 1024) {
+        return `${(safe / 1024).toFixed(1)} KB`;
+    }
+    return `${safe} B`;
+}
 
 export const QueueList = React.memo(function QueueList({
     queue,
@@ -28,6 +45,8 @@ export const QueueList = React.memo(function QueueList({
     onReorder,
     onLoadDefault,
     onAddTrack,
+    cacheStats,
+    onClearCache,
 }: Props) {
     const [addUrl, setAddUrl] = useState('');
     const [isAdding, setIsAdding] = useState(false);
@@ -50,14 +69,56 @@ export const QueueList = React.memo(function QueueList({
         }
     };
 
+    const showCachePill = !!(
+        cacheStats?.enabled &&
+        (cacheStats.queuedLocalCount > 0 || cacheStats.totalBytes > 0)
+    );
+
+    const renderRowBadge = (state?: TrackCacheState) => {
+        if (!state) return null;
+        const cfg =
+            state === 'MEMORY'
+                ? { text: 'RAM', bg: '#1976D2' }
+                : state === 'PREFETCHING'
+                    ? { text: '⏳', bg: '#F57C00' }
+                    : { text: 'DISK', bg: '#616161' };
+        return (
+            <View style={[styles.rowCacheBadge, { backgroundColor: cfg.bg }]}>
+                <ThemedText style={styles.rowCacheBadgeText}>{cfg.text}</ThemedText>
+            </View>
+        );
+    };
+
     return (
         <ThemedView style={styles.container}>
-            <ThemedText type="subtitle" style={styles.header}>Queue</ThemedText>
-            
+            <View style={styles.headerRow}>
+                <ThemedText type="subtitle" style={styles.header}>Queue</ThemedText>
+                {showCachePill && cacheStats && (
+                    <View style={styles.cacheHeaderGroup}>
+                        <View style={styles.cachePill} testID="queue-cache-pill">
+                            <ThemedText style={styles.cachePillText}>
+                                {cacheStats.queuedLocalCount > 0
+                                    ? `RAM ${cacheStats.queuedInMemoryCount}/${cacheStats.queuedLocalCount} • ${formatBytes(cacheStats.totalBytes)} / ${formatBytes(cacheStats.maxBytes)}`
+                                    : `LRU ${formatBytes(cacheStats.lruBytes)} / ${formatBytes(cacheStats.maxBytes)}`}
+                            </ThemedText>
+                        </View>
+                        {cacheStats.lruBytes > 0 && onClearCache && (
+                            <TouchableOpacity
+                                style={styles.clearCacheBtn}
+                                onPress={() => void onClearCache()}
+                                testID="clear-lru-button"
+                            >
+                                <ThemedText style={styles.clearCacheBtnText}>Clear LRU</ThemedText>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+            </View>
+
             <View style={styles.addTrackContainer}>
                 <TextInput
                     style={[styles.input, { backgroundColor: inputBg, color: inputText }]}
-                    placeholder="Search or Paste URL..."
+                    placeholder="Paste URL, file, or folder path..."
                     placeholderTextColor="#888"
                     value={addUrl}
                     onChangeText={setAddUrl}
@@ -65,8 +126,8 @@ export const QueueList = React.memo(function QueueList({
                     returnKeyType="search"
                     editable={!isAdding}
                 />
-                <TouchableOpacity 
-                    style={[styles.addBtn, (!addUrl.trim() || isAdding) && { opacity: 0.5 }]} 
+                <TouchableOpacity
+                    style={[styles.addBtn, (!addUrl.trim() || isAdding) && { opacity: 0.5 }]}
                     onPress={handleAdd}
                     disabled={!addUrl.trim() || isAdding}
                 >
@@ -95,14 +156,14 @@ export const QueueList = React.memo(function QueueList({
                         <ThemedView style={[styles.itemContainer, { borderBottomColor: borderThemeColor }]}>
                             {onReorder && (
                                 <View style={styles.reorderControls}>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={[styles.reorderBtn, index === 0 && { opacity: 0.2 }]}
                                         disabled={index === 0}
                                         onPress={() => onReorder(index, index - 1)}
                                     >
                                         <Ionicons name="chevron-up" size={16} color={reorderIconColor} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={[styles.reorderBtn, index === queue.length - 1 && { opacity: 0.2 }]}
                                         disabled={index === queue.length - 1}
                                         onPress={() => onReorder(index, index + 1)}
@@ -117,8 +178,9 @@ export const QueueList = React.memo(function QueueList({
                                     <ThemedText style={styles.artist}>{item.artist}</ThemedText>
                                 ) : null}
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.removeButton} 
+                            {renderRowBadge(item.cacheState)}
+                            <TouchableOpacity
+                                style={styles.removeButton}
                                 onPress={() => onRemove(item.id)}
                             >
                                 <Ionicons name="trash-outline" size={18} color="red" />
@@ -137,9 +199,45 @@ const styles = StyleSheet.create({
         width: '100%',
         paddingHorizontal: 20,
     },
-    header: {
+    headerRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
         marginBottom: 10,
         marginTop: 10,
+    },
+    header: {
+        marginBottom: 0,
+        marginTop: 0,
+    },
+    cacheHeaderGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    cachePill: {
+        backgroundColor: '#1976D2',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+    },
+    cachePillText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    clearCacheBtn: {
+        backgroundColor: '#555',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+    },
+    clearCacheBtnText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: '600',
     },
     listContent: {
         paddingBottom: 20,
@@ -195,6 +293,16 @@ const styles = StyleSheet.create({
     artist: {
         fontSize: 11,
         opacity: 0.6,
+    },
+    rowCacheBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    rowCacheBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
     removeButton: {
         padding: 5,

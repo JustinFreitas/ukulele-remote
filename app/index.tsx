@@ -1,6 +1,6 @@
 import { Config } from '@/constants/Config';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ import { QueueList, Track } from '@/components/QueueList';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { VoiceChannelSelector } from '@/components/VoiceChannelSelector';
-import { API_BASE_URL, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
+import { API_BASE_URL, CacheStatsDto, TrackCacheState, UkuleleApi, VoiceChannelDto } from '@/constants/ukulele-api';
 import WebSocketService from '@/services/WebSocketService';
 
 if (Platform.OS === 'web') {
@@ -43,6 +43,8 @@ export default function AudioControllerScreen() {
   const [volume, setVolume] = useState(0.5);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
+  const [currentTrackCacheState, setCurrentTrackCacheState] = useState<TrackCacheState>(null);
+  const [cacheStats, setCacheStats] = useState<CacheStatsDto | null>(null);
   const [serverStats, setServerStats] = useState({ minVolume: 0, maxVolume: 80, isReplayGain: false, replayGainDb: null as number | null, isReplayGainEnabled: false, queueSize: 0 });
   const [useWebsockets, setUseWebsockets] = useState(false);
   const [guildId, setGuildId] = useState<string | null>(null);
@@ -89,6 +91,13 @@ export default function AudioControllerScreen() {
   const lastFadeUpdate = useRef<number>(0);
   const lastTrackId = useRef<string | null>(null);
   const lastQueueSize = useRef<number>(0);
+  const lastQueuedInMemoryCount = useRef<number>(-1);
+  const lastPrefetchingCount = useRef<number>(-1);
+  const cacheQueueRefreshTimeout = useRef<any>(null);
+  const queueRef = useRef<Track[]>(queue);
+  queueRef.current = queue;
+  const autoFadeInRef = useRef<boolean>(autoFadeIn);
+  autoFadeInRef.current = autoFadeIn;
   const isMountedRef = useRef<boolean>(true);
   const actionTimeouts = useRef<any[]>([]);
   const scheduleTimeout = (fn: () => void, ms: number) => {
@@ -107,6 +116,8 @@ export default function AudioControllerScreen() {
   // Channels
   const [channels, setChannels] = useState<VoiceChannelDto[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const selectedChannelIdRef = useRef<string | null>(selectedChannelId);
+  selectedChannelIdRef.current = selectedChannelId;
 
   // Component mount lifecycle cleanup
   useEffect(() => {
@@ -117,6 +128,9 @@ export default function AudioControllerScreen() {
       actionTimeouts.current = [];
       if (volumeDebounceTimeout.current) {
         clearTimeout(volumeDebounceTimeout.current);
+      }
+      if (cacheQueueRefreshTimeout.current) {
+        clearTimeout(cacheQueueRefreshTimeout.current);
       }
     };
   }, []);
@@ -416,15 +430,49 @@ export default function AudioControllerScreen() {
     setRepeat(status.repeatTrack);
     setLoop(status.queueLooping);
 
-    // Track change & Server Fade State Sync
+    // Track change, Queue Size, & Background Prefetch State Sync
     const newTrackId = status.currentTrack?.uri || null;
+    const nextCacheStats: CacheStatsDto | null = status.cacheStats ?? null;
+    const nextInMem = nextCacheStats?.queuedInMemoryCount ?? -1;
+    const nextPrefetching = nextCacheStats?.prefetchingCount ?? -1;
+
     if (newTrackId !== lastTrackId.current) {
       lastFadeUpdate.current = 0;
       lastTrackId.current = newTrackId;
+      if (status.queueSize !== undefined) {
+        lastQueueSize.current = status.queueSize;
+      }
+      lastQueuedInMemoryCount.current = nextInMem;
+      lastPrefetchingCount.current = nextPrefetching;
+      if (cacheQueueRefreshTimeout.current) {
+        clearTimeout(cacheQueueRefreshTimeout.current);
+        cacheQueueRefreshTimeout.current = null;
+      }
       void fetchQueue(status.guildId);
     } else if (status.queueSize !== undefined && status.queueSize !== lastQueueSize.current) {
       lastQueueSize.current = status.queueSize;
+      lastQueuedInMemoryCount.current = nextInMem;
+      lastPrefetchingCount.current = nextPrefetching;
+      if (cacheQueueRefreshTimeout.current) {
+        clearTimeout(cacheQueueRefreshTimeout.current);
+        cacheQueueRefreshTimeout.current = null;
+      }
       void fetchQueue(status.guildId);
+    } else if (
+      nextInMem !== lastQueuedInMemoryCount.current ||
+      nextPrefetching !== lastPrefetchingCount.current
+    ) {
+      lastQueuedInMemoryCount.current = nextInMem;
+      lastPrefetchingCount.current = nextPrefetching;
+      if (!cacheQueueRefreshTimeout.current) {
+        const targetGuildId = status.guildId;
+        cacheQueueRefreshTimeout.current = setTimeout(() => {
+          cacheQueueRefreshTimeout.current = null;
+          if (isMountedRef.current) {
+            void fetchQueue(targetGuildId);
+          }
+        }, 1500);
+      }
     }
 
     if (Date.now() - lastFadeUpdate.current > 1500) {
@@ -436,6 +484,8 @@ export default function AudioControllerScreen() {
       }
     }
     setCurrentTrack(status.currentTrack?.title || null);
+    setCurrentTrackCacheState(status.currentTrack?.cacheState ?? null);
+    setCacheStats(nextCacheStats);
     if (status.minVolume !== undefined) {
       setServerStats({
         minVolume: status.minVolume,
@@ -462,20 +512,27 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const fetchQueue = async (overrideGuildId?: string) => {
-    const targetId = overrideGuildId || guildId;
+  const fetchQueue = useCallback(async (overrideGuildId?: string) => {
+    const targetId = overrideGuildId || guildIdRef.current;
     if (!targetId) return;
     try {
       const tracks = await UkuleleApi.getQueue(targetId);
-      setQueue(tracks.map((t, i) => ({
-        id: t.uri + i,
-        title: t.title,
-        artist: t.author
-      })));
+      if (!isMountedRef.current) return;
+      const counts = new Map<string, number>();
+      setQueue(tracks.map((t) => {
+        const occ = counts.get(t.uri) || 0;
+        counts.set(t.uri, occ + 1);
+        return {
+          id: `${t.uri}#${occ}`,
+          title: t.title,
+          artist: t.author,
+          cacheState: t.cacheState ?? null,
+        };
+      }));
     } catch {
       // console.warn("Failed to fetch queue");
     }
-  };
+  }, []);
 
   const handlePlayPause = async () => {
     if (!guildId) return;
@@ -596,21 +653,23 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const handleRemoveTrack = async (id: string) => {
-    if (!guildId) return;
-    const index = queue.findIndex(t => t.id === id);
+  const handleRemoveTrack = useCallback(async (id: string) => {
+    const gid = guildIdRef.current;
+    if (!gid) return;
+    const index = queueRef.current.findIndex(t => t.id === id);
     if (index === -1) return;
     try {
-      await UkuleleApi.removeTrack(guildId, index);
+      await UkuleleApi.removeTrack(gid, index);
       // Let the socket status update update the queue size and trigger fetchQueue, or fetch now
-      await fetchQueue();
+      await fetchQueue(gid);
     } catch (e: any) {
       Alert.alert("Failed to remove track", e.message);
     }
-  };
+  }, [fetchQueue]);
 
-  const handlePlayTrack = (_id: string, index: number) => {
-    if (!guildId) return;
+  const handlePlayTrack = useCallback((_id: string, index: number) => {
+    const gid = guildIdRef.current;
+    if (!gid) return;
     Alert.alert(
       "Jump to Track?",
       `Skip to track #${index + 1}?`,
@@ -620,10 +679,10 @@ export default function AudioControllerScreen() {
           text: "Jump",
           onPress: async () => {
             try {
-              await UkuleleApi.skip(guildId, index);
+              await UkuleleApi.skip(gid, index);
               scheduleTimeout(() => {
-                void fetchPlayerState();
-                void fetchQueue();
+                void fetchPlayerState(gid);
+                void fetchQueue(gid);
               }, 500);
             } catch (e: any) {
               Alert.alert("Failed to jump to track", e.message);
@@ -632,17 +691,19 @@ export default function AudioControllerScreen() {
         }
       ]
     );
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchQueue]);
 
-  const handleReorder = async (fromIndex: number, toIndex: number) => {
-    if (!guildId) return;
+  const handleReorder = useCallback(async (fromIndex: number, toIndex: number) => {
+    const gid = guildIdRef.current;
+    if (!gid) return;
     try {
-      await UkuleleApi.reorderQueue(guildId, fromIndex, toIndex);
-      await fetchQueue();
+      await UkuleleApi.reorderQueue(gid, fromIndex, toIndex);
+      await fetchQueue(gid);
     } catch (e: any) {
       Alert.alert("Failed to reorder queue", e.message);
     }
-  };
+  }, [fetchQueue]);
 
   const handleStop = async () => {
     if (!guildId) return;
@@ -709,25 +770,40 @@ export default function AudioControllerScreen() {
     }
   };
 
-  const handleLoadDefault = async () => {
-    if (!guildId) return;
+  const handleLoadDefault = useCallback(async () => {
+    const gid = guildIdRef.current;
+    if (!gid) return;
     try {
-      await UkuleleApi.play(guildId, "", selectedChannelId || undefined, autoFadeIn);
-      await fetchPlayerState();
-      scheduleTimeout(() => { void fetchQueue(); }, 500); // Give it a moment to load
-      scheduleTimeout(() => { void fetchPlayerState(); }, 1000); // Check again once loaded
+      await UkuleleApi.play(gid, "", selectedChannelIdRef.current || undefined, autoFadeInRef.current);
+      await fetchPlayerState(gid);
+      scheduleTimeout(() => { void fetchQueue(gid); }, 500); // Give it a moment to load
+      scheduleTimeout(() => { void fetchPlayerState(gid); }, 1000); // Check again once loaded
     } catch (e: any) {
       console.error(e);
       Alert.alert("Failed to load default playlist", e.message);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchQueue]);
 
-  const handleAddTrack = async (url: string) => {
-    if (!guildId) return;
-    await UkuleleApi.play(guildId, url, selectedChannelId || undefined, autoFadeIn);
-    await fetchPlayerState();
-    scheduleTimeout(() => { void fetchQueue(); }, 500);
-  };
+  const handleAddTrack = useCallback(async (url: string) => {
+    const gid = guildIdRef.current;
+    if (!gid) return;
+    await UkuleleApi.play(gid, url, selectedChannelIdRef.current || undefined, autoFadeInRef.current);
+    await fetchPlayerState(gid);
+    scheduleTimeout(() => { void fetchQueue(gid); }, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchQueue]);
+
+  const handleClearCache = useCallback(async () => {
+    try {
+      const updated = await UkuleleApi.clearCache();
+      if (isMountedRef.current) {
+        setCacheStats(updated);
+      }
+    } catch (e: any) {
+      Alert.alert("Failed to clear LRU cache", e.message);
+    }
+  }, []);
 
 
   return (
@@ -801,6 +877,7 @@ export default function AudioControllerScreen() {
           isReplayGain={serverStats.isReplayGain} // We need to store this in state
           replayGainDb={serverStats.replayGainDb}
           isReplayGainEnabled={serverStats.isReplayGainEnabled}
+          cacheState={currentTrackCacheState}
           hasNext={serverStats.queueSize > 0 || repeat || loop}
           onFadeIn={handleFadeIn}
           onFadeOut={handleFadeOut}
@@ -820,6 +897,8 @@ export default function AudioControllerScreen() {
           onReorder={handleReorder}
           onLoadDefault={handleLoadDefault}
           onAddTrack={handleAddTrack}
+          cacheStats={cacheStats}
+          onClearCache={handleClearCache}
         />
       </ThemedView>
       <View style={{ position: 'absolute', bottom: 20, right: 20, opacity: 0.5 }}>

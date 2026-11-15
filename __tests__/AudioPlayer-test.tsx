@@ -90,4 +90,13 @@ describe('AudioPlayer UI Interactions', () => {
     expect(getByText('+12')).toBeTruthy();
     expect(getByText('+20')).toBeTruthy();
   });
+
+  it('renders RAM cache badge when currentTrack has cacheState MEMORY', () => {
+    const { getByTestId, getByText } = render(
+      <AudioPlayer {...mockProps} cacheState="MEMORY" />
+    );
+
+    expect(getByTestId('cache-state-badge')).toBeTruthy();
+    expect(getByText('RAM')).toBeTruthy();
+  });
 });

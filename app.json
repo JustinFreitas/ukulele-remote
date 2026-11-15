@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ukulele Remote",
     "slug": "ukulele-remote",
-    "version": "1.0.8",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ukulele-remote",

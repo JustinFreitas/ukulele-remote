@@ -186,7 +186,7 @@ describe('AudioControllerScreen (WebSocket, Polling, AppState & Fade Fixes)', ()
 
     expect(UkuleleApi.play).toHaveBeenCalledWith('guild-1', '', 'chan-1', true);
 
-    const input = getByPlaceholderText('Search or Paste URL...');
+    const input = getByPlaceholderText('Paste URL, file, or folder path...');
     fireEvent.changeText(input, 'https://youtube.com/watch?v=abc');
     await act(async () => {
       fireEvent(input, 'submitEditing');

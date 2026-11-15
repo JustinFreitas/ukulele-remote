@@ -45,12 +45,52 @@ describe('QueueList', () => {
   it('calls onAddTrack when submitting new track URL', async () => {
     const { getByPlaceholderText } = render(<QueueList {...mockProps} />);
 
-    const input = getByPlaceholderText('Search or Paste URL...');
+    const input = getByPlaceholderText('Paste URL, file, or folder path...');
     fireEvent.changeText(input, 'https://youtube.com/watch?v=123');
     await act(async () => {
       fireEvent(input, 'submitEditing');
     });
 
     expect(mockProps.onAddTrack).toHaveBeenCalledWith('https://youtube.com/watch?v=123');
+  });
+
+  it('renders per-track RAM/DISK cache badges and header RAM summary with Clear LRU action', async () => {
+    const onClearCache = jest.fn().mockResolvedValue(undefined);
+    const queue = [
+      { id: 'Z:/Music/1.flac#0', title: 'Tavern Loop', artist: 'Bard', cacheState: 'MEMORY' as const },
+      { id: 'Z:/Music/2.flac#0', title: 'Boss Battle', artist: 'Orchestra', cacheState: 'DISK' as const },
+    ];
+    const cacheStats = {
+      enabled: true,
+      pinnedBytes: 52428800,
+      lruBytes: 26214400,
+      totalBytes: 78643200,
+      maxBytes: 8589934592,
+      pinnedCount: 1,
+      lruCount: 1,
+      queuedLocalCount: 2,
+      queuedInMemoryCount: 1,
+      prefetchingCount: 0,
+    };
+
+    const { getByText, getByTestId } = render(
+      <QueueList
+        {...mockProps}
+        queue={queue}
+        cacheStats={cacheStats}
+        onClearCache={onClearCache}
+      />
+    );
+
+    expect(getByText('RAM')).toBeTruthy();
+    expect(getByText('DISK')).toBeTruthy();
+    expect(getByTestId('queue-cache-pill')).toBeTruthy();
+    expect(getByText(/RAM 1\/2/)).toBeTruthy();
+
+    const clearBtn = getByTestId('clear-lru-button');
+    await act(async () => {
+      fireEvent.press(clearBtn);
+    });
+    expect(onClearCache).toHaveBeenCalled();
   });
 });

@@ -16,12 +16,26 @@ const headers = {
     'Pragma': 'no-cache'
 };
 
+export type TrackCacheState = 'MEMORY' | 'PREFETCHING' | 'DISK' | null;
+
+export interface CacheStatsDto {
+    enabled: boolean;
+    pinnedBytes: number;
+    lruBytes: number;
+    totalBytes: number;
+    maxBytes: number;
+    pinnedCount: number;
+    lruCount: number;
+    queuedLocalCount: number;
+    queuedInMemoryCount: number;
+    prefetchingCount: number;
+}
+
 export interface GuildDto {
     id: string;
     name: string;
     isPlaying: boolean;
 }
-
 
 export interface TrackDto {
     title: string;
@@ -31,6 +45,7 @@ export interface TrackDto {
     position: number;
     isReplayGain: boolean;
     replayGainDb: number | null;
+    cacheState?: TrackCacheState;
 }
 
 export interface PlayerStatusDto {
@@ -48,15 +63,13 @@ export interface PlayerStatusDto {
     channelId?: string;
     trackFade?: boolean;
     isFadedOut?: boolean;
+    cacheStats?: CacheStatsDto | null;
 }
 
-// ...
 export interface VoiceChannelDto {
     id: string;
     name: string;
 }
-
-// ... 
 
 const fetchWithTimeout = async (resource: string, options: RequestInit & { timeout?: number } = {}) => {
     const { timeout = 2000, ...fetchOptions } = options as any;
@@ -248,6 +261,18 @@ export const UkuleleApi = {
             body: JSON.stringify({ fromIndex, toIndex })
         });
         await ensureOk(res, 'Failed to reorder queue');
+    },
+
+    getCacheStats: async (): Promise<CacheStatsDto> => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/cache`, { headers });
+        await ensureOk(res, 'Failed to fetch cache stats');
+        return res.json();
+    },
+
+    clearCache: async (): Promise<CacheStatsDto> => {
+        const res = await fetchWithTimeout(`${API_BASE_URL}/cache/clear`, { method: 'POST', headers });
+        await ensureOk(res, 'Failed to clear LRU cache');
+        return res.json();
     },
 
     getSecurityStats: async (): Promise<{ unauthorizedAttempts: number }> => {

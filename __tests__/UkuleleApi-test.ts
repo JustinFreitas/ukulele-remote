@@ -253,5 +253,55 @@ describe('UkuleleApi Methods', () => {
       expect.objectContaining({ method: 'POST' })
     );
   });
+
+  it('getCacheStats fetches RAM cache telemetry', async () => {
+    const mockCacheStats = {
+      enabled: true,
+      pinnedBytes: 10485760,
+      lruBytes: 5242880,
+      totalBytes: 15728640,
+      maxBytes: 8589934592,
+      pinnedCount: 2,
+      lruCount: 1,
+      queuedLocalCount: 2,
+      queuedInMemoryCount: 2,
+      prefetchingCount: 0,
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockCacheStats,
+    });
+    const stats = await UkuleleApi.getCacheStats();
+    expect(stats).toEqual(mockCacheStats);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/cache`,
+      expect.objectContaining({ headers: expect.any(Object) })
+    );
+  });
+
+  it('clearCache posts to cache clear endpoint and returns updated stats', async () => {
+    const updatedStats = {
+      enabled: true,
+      pinnedBytes: 10485760,
+      lruBytes: 0,
+      totalBytes: 10485760,
+      maxBytes: 8589934592,
+      pinnedCount: 2,
+      lruCount: 0,
+      queuedLocalCount: 2,
+      queuedInMemoryCount: 2,
+      prefetchingCount: 0,
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => updatedStats,
+    });
+    const result = await UkuleleApi.clearCache();
+    expect(result).toEqual(updatedStats);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/cache/clear`,
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
 });
 

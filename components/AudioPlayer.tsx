@@ -2,6 +2,7 @@ import { SeekBar } from '@/components/SeekBar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Config } from '@/constants/Config';
+import { TrackCacheState } from '@/constants/ukulele-api';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -23,6 +24,7 @@ type Props = {
     isReplayGain?: boolean;
     replayGainDb?: number | null;
     isReplayGainEnabled?: boolean;
+    cacheState?: TrackCacheState;
     hasNext?: boolean;
     onFadeIn: () => void;
     onFadeOut: () => void;
@@ -35,7 +37,7 @@ type Props = {
     autoFadeIn: boolean;
 };
 
-export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, replayGainDb, isReplayGainEnabled, hasNext = true, onFadeIn, onFadeOut, onStop, onShuffle, onToggleRepeat, onToggleLoop, repeat, loop, autoFadeIn }: Props) {
+export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, onVolumeChange, currentTrack, minVolume, maxVolume, position, duration, onSeek, isReplayGain, replayGainDb, isReplayGainEnabled, cacheState, hasNext = true, onFadeIn, onFadeOut, onStop, onShuffle, onToggleRepeat, onToggleLoop, repeat, loop, autoFadeIn }: Props) {
     const iconColor = useThemeColor({}, 'text');
     const trackColor = useThemeColor({ light: '#e0e0e0', dark: '#333333' }, 'text');
     const buttonBgColor = useThemeColor({ light: '#eee', dark: '#2c2c2e' }, 'background');
@@ -48,11 +50,6 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
     const fadeInIconColor = autoFadeIn ? 'white' : defaultFadeInIconColor;
     const [barWidth, setBarWidth] = React.useState(0);
 
-    // Dynamic Volume Steps
-    // If range is small (e.g. 0-30), 1% change might do nothing.
-    // Calculate optimal step size to change real volume by at least 1.
-    // 100% / Range = Step percentage needed.
-    // e.g. 100/30 = 3.33% -> round up to 4?
     let stepSmall = Config.VOL_STEP_SMALL;
     let stepMedium = Config.VOL_STEP_MEDIUM;
     let stepLarge = Config.VOL_STEP_LARGE;
@@ -61,11 +58,10 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
         const range = maxVolume - minVolume;
         if (range > 0) {
             const optimal = Math.ceil(100 / range);
-            stepSmall = Math.max(optimal, Config.VOL_STEP_SMALL); // At least configured small step
-            stepMedium = Math.max(Config.VOL_STEP_MEDIUM, stepSmall * 3); // Preserve default when optimal <= 1
-            stepLarge = Math.max(Config.VOL_STEP_LARGE, stepSmall * 5);  // Preserve default when optimal <= 1
+            stepSmall = Math.max(optimal, Config.VOL_STEP_SMALL);
+            stepMedium = Math.max(Config.VOL_STEP_MEDIUM, stepSmall * 3);
+            stepLarge = Math.max(Config.VOL_STEP_LARGE, stepSmall * 5);
 
-            // Cap at reasonable values if range is tiny
             if (stepMedium > 25) stepMedium = 25;
             if (stepLarge > 50) stepLarge = 50;
         }
@@ -79,30 +75,36 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
         onVolumeChange(newVolume);
     };
 
+    const cacheBadge = currentTrack && cacheState ? (
+        cacheState === 'MEMORY'
+            ? { label: 'RAM', bg: '#1976D2' }
+            : cacheState === 'PREFETCHING'
+                ? { label: '⏳ RAM', bg: '#F57C00' }
+                : { label: 'DISK', bg: '#616161' }
+    ) : null;
+
     return (
         <ThemedView style={styles.container}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+            <View style={styles.titleRow}>
                 {isReplayGainEnabled && currentTrack && (
-                    <View style={{
+                    <View style={[styles.badge, {
                         backgroundColor: isReplayGain ? '#4CAF50' : '#888',
-                        width: 20,
-                        height: 20,
-                        borderRadius: 3,
-                        marginRight: 6,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginTop: 3,
                         opacity: isReplayGain ? 1 : 0.5
-                    }}>
-                        <ThemedText style={{ fontSize: 11, lineHeight: 14, fontWeight: 'bold', color: 'white', textAlign: 'center', includeFontPadding: false }}>RG</ThemedText>
+                    }]}>
+                        <ThemedText style={styles.badgeText}>RG</ThemedText>
                     </View>
                 )}
                 {isReplayGainEnabled && currentTrack && replayGainDb != null && (
-                    <ThemedText style={{ fontSize: 12, opacity: 0.7, marginRight: 6, marginTop: 3 }}>
+                    <ThemedText style={styles.dbText}>
                         {`${replayGainDb >= 0 ? '+' : ''}${replayGainDb.toFixed(1)} dB`}
                     </ThemedText>
                 )}
-                <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
+                {cacheBadge && (
+                    <View style={[styles.badge, { backgroundColor: cacheBadge.bg }]} testID="cache-state-badge">
+                        <ThemedText style={styles.badgeText}>{cacheBadge.label}</ThemedText>
+                    </View>
+                )}
+                <ThemedText type="subtitle" style={styles.trackTitle}>
                     {currentTrack || 'No Track Playing'}
                 </ThemedText>
             </View>
@@ -126,7 +128,7 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
             <View style={styles.volumeContainer}>
                 <Ionicons name="volume-low" size={24} color={iconColor} />
                 <Pressable
-                    style={[styles.volumeBar, { height: 20, justifyContent: 'center' }]} // Increased height for touch target
+                    style={[styles.volumeBar, { height: 20, justifyContent: 'center' }]}
                     onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
                     onPress={handleVolumePress}
                 >
@@ -208,15 +210,51 @@ export function AudioPlayer({ isPlaying, onPlayPause, onNext, onPrev, volume, on
 
 const styles = StyleSheet.create({
     container: {
-        padding: 0, // Reduced padding since no border
+        padding: 0,
         width: '100%',
         marginBottom: 20,
     },
-
+    titleRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'center',
+        rowGap: 4,
+        paddingHorizontal: 8,
+        marginBottom: 20,
+    },
+    badge: {
+        minWidth: 20,
+        height: 20,
+        paddingHorizontal: 5,
+        borderRadius: 3,
+        marginRight: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    badgeText: {
+        fontSize: 11,
+        lineHeight: 14,
+        fontWeight: 'bold',
+        color: 'white',
+        textAlign: 'center',
+        includeFontPadding: false,
+    },
+    dbText: {
+        fontSize: 12,
+        opacity: 0.7,
+        marginRight: 6,
+        marginTop: 2,
+    },
+    trackTitle: {
+        textAlign: 'center',
+        flexShrink: 1,
+    },
     controls: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center', // Center controls
+        justifyContent: 'center',
         gap: 30,
         marginBottom: 20,
         marginTop: -10,
